@@ -161,6 +161,10 @@ L<セッション|Tripletail::TinySession> はFormから読む。文字コード
 
 SEO入力フィルタ。
 
+=item L<Tripletail::InputFilter::Plain>
+
+何もしないフィルタ。
+	
 =back
 
 

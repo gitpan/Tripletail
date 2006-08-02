@@ -1100,6 +1100,85 @@ DBコネクションの名称はCON_XXXX(XXXXは任意の文字列)でなけれ�
 
 =back
 
+=head2 DBIからの移行
+
+TripletailのDBクラスはDBIに対するラッパの形となっており、多くのインタフェースはDBIのものとは異なる。
+ただし、いつでも $DB->getDbh() メソッドにより元のDBIオブジェクトを取得できるので、DBIのインタフェースで利用することも可能となっている。
+
+DBIのインタフェースは以下のようなケースで利用できる。ただし、DBIを直接利用する場合は、TLの拡張プレースホルダやデバッグ機能、トランザクション整合性の管理などの機能は利用できない。
+
+=over 4
+
+=item ラッパに同等の機能が用意されていない場合。
+
+（例）$DB->{mysql_insertid}
+
+=item 高速な処理が必要で、ラッパのオーバヘッドを回避したい場合。
+
+DBIに対するラッパであるため、大量のSQLを実行する場合などはパフォーマンス上のデメリットがある。
+
+=back
+
+DBIでのSELECTは、以下のように置き換えられる。
+
+ # DBI
+ my $sth = $DB->prepare(q{SELECT * FROM test WHERE id = ?});
+ $sth->execute($id);
+ while(my $data = $sth->fetchrow_hashref) {
+ }
+ # TL
+ my $sth = $DB->execute(q{SELECT * FROM test WHERE id = ?}, $id);
+ while(my $data = $sth->fetchHash) {
+ }
+
+TLではprepare/executeは一括で行い、prepared statement は利用できない。
+
+INSERT・UPDATEは、以下のように置き換えられる。
+
+ # DBI
+ my $sth = $DB->prepare(q{INSERT INTO test VALUES (?, ?)});
+ my $ret = $sth->execute($id, $data);
+ # TL
+ my $sth = $DB->execute(q{INSERT INTO test VALUES (?, ?)}, $id, $data);
+ my $ret = $sth->ret;
+
+prepare/executeを一括で行うのは同様であるが、executeの戻り値は$sthオブジェクトであり、影響した行数を取得するためには $sth->ret メソッドを呼ぶ必要がある。
+
+プレースホルダの型指定は以下のように行う。
+
+ # DBI
+ my $sth = $DB->prepare(q{SELECT * FROM test LIMIT ?});
+ $sth->bind_param(1, $limit, { TYPE => SQL_INTEGER });
+ $sth->execute;
+ # TL
+ my $sth = $DB->execute(q{SELECT * FROM test LIMIT ??}, [$limit, \'SQL_INTEGER']);
+
+TLの拡張プレースホルダ（??で表記される）を利用し、配列のリファレンスの最後に型をスカラのリファレンスの形で渡す。
+拡張プレースホルダでは、複数の値を渡すことも可能である。
+
+ # DBI
+ my $sth = $DB->prepare(q{SELECT * FROM test LIMIT ?, ?});
+ $sth->bind_param(1, $limit, { TYPE => SQL_INTEGER });
+ $sth->bind_param(2, $offset, { TYPE => SQL_INTEGER });
+ $sth->execute;
+ # TL
+ my $sth = $DB->execute(q{SELECT * FROM test LIMIT ??}, [$limit, $offset, \'SQL_INTEGER']);
+
+最後にINSERTした行のAUTO_INCREMENT値の取得などは、拡張ラッパでは制御できないので、DBIのハンドラを直接利用する。
+
+ # DBI
+ my $id = $DB->{mysql_insertid};
+ # TL
+ my $id = $DB->getDbh()->{mysql_insertid};
+
+BEGIN/COMMIT/ROLLBACKはDBIとほぼ同様である。ただし、TLの場合はAutoCommitがデフォルトでONであり、トランザクションを開始する場合は専用のbeginメソッドを利用する。
+
+ # DBI
+ $DB->do(q{BEGIN WORK});
+ $DB->commit;
+ # TL
+ $DB->begin;    # $DB->execute(q{BEGIN WORK}) としてはならない
+ $DB->commit;
 
 =head2 拡張プレースホルダ詳細
 

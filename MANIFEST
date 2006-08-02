@@ -71,6 +71,7 @@ doc/Tripletail/Filter/MobileHTML.html
 doc/Tripletail/Filter/Redirect.html
 doc/Tripletail/Filter/SEO.html
 doc/Tripletail/Filter/TEXT.html
+doc/Tripletail/InputFilter/Plain.html
 doc/Tripletail/InputFilter/HTML.html
 doc/Tripletail/InputFilter/MobileHTML.html
 doc/Tripletail/InputFilter/SEO.html
@@ -131,6 +132,7 @@ lib/Tripletail/Filter/TEXT.pm
 lib/Tripletail/InputFilter/SEO.pm
 lib/Tripletail/InputFilter/MobileHTML.pm
 lib/Tripletail/InputFilter/HTML.pm
+lib/Tripletail/InputFilter/Plain.pm
 lib/Tripletail/Sendmail/MailQueue.pm
 lib/Tripletail/Sendmail/Smtp.pm
 lib/Tripletail/Sendmail/Esmtp.pm

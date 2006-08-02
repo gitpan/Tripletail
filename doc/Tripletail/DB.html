@@ -38,6 +38,11 @@ Tripletail::DB - DBIのラッパ
 
 </span></a>
 <ul>
+<li><a href="#DBIXe3X81X8bXe3X82X89Xe3X81XaeXe7Xa7XbbXe8Xa1X8c">
+<span class="pod_lang">DBIからの移行
+
+</span></a>
+</li>
 <li><a href="#Xe6X8bXa1Xe5XbcXb5Xe3X83X97Xe3X83XacXe3X83XbcXe3X82Xb9Xe3X83X9bXe3X83XabXe3X83X80Xe8Xa9Xb3Xe7Xb4Xb0">
 <span class="pod_lang">拡張プレースホルダ詳細
 
@@ -246,6 +251,142 @@ DBコネクションの名称はCON_XXXX(XXXXは任意の文字列)でなけれ�
 
 </dd>
 </dl>
+
+<h2><a id="DBIXe3X81X8bXe3X82X89Xe3X81XaeXe7Xa7XbbXe8Xa1X8c">
+<span class="pod_lang">DBIからの移行
+
+</span></a></h2>
+
+<p>
+<span class="pod_lang">TripletailのDBクラスはDBIに対するラッパの形となっており、多くのインタフェースはDBIのものとは異なる。
+ただし、いつでも $DB-&gt;getDbh() メソッドにより元のDBIオブジェクトを取得できるので、DBIのインタフェースで利用することも可能となっている。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">DBIのインタフェースは以下のようなケースで利用できる。ただし、DBIを直接利用する場合は、TLの拡張プレースホルダやデバッグ機能、トランザクション整合性の管理などの機能は利用できない。
+
+</span>
+</p>
+
+<dl>
+<dt><a id="item_Xe3X83Xa9Xe3X83X83Xe3X83X91Xe3X81XabXe5X90X8cXe7XadX89Xe3X81XaeXe6Xa9X9fXe8X83XbdXe3X81X8cXe7X94Xa8Xe6X84X8fXe3X81X95Xe3X82X8cXe3X81Xa6Xe3X81X84Xe3X81XaaXe3X81X84Xe5Xa0Xb4Xe5X90X88Xe3X80X82"><span class="pod_lang">ラッパに同等の機能が用意されていない場合。
+
+</span></a></dt>
+<dd>
+<p>
+<span class="pod_lang">（例）$DB-&gt;{mysql_insertid}
+
+</span>
+</p>
+
+</dd>
+<dt><a id="item_Xe9XabX98Xe9X80X9fXe3X81XaaXe5X87Xa6Xe7X90X86Xe3X81X8cXe5XbfX85Xe8Xa6X81Xe3X81Xa7Xe3X80X81Xe3X83Xa9Xe3X83X83Xe3X83X91Xe3X81XaeXe3X82XaaXe3X83XbcXe3X83X90Xe3X83X98Xe3X83X83Xe3X83X89Xe3X82X92Xe5X9bX9eXe9X81XbfXe3X81X97Xe3X81X9fXe3X81X84Xe5Xa0Xb4Xe5X90X88Xe3X80X82"><span class="pod_lang">高速な処理が必要で、ラッパのオーバヘッドを回避したい場合。
+
+</span></a></dt>
+<dd>
+<p>
+<span class="pod_lang">DBIに対するラッパであるため、大量のSQLを実行する場合などはパフォーマンス上のデメリットがある。
+
+</span>
+</p>
+
+</dd>
+</dl>
+
+<p>
+<span class="pod_lang">DBIでのSELECTは、以下のように置き換えられる。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code> # DBI
+ my $sth = $DB-&gt;prepare(q{SELECT * FROM test WHERE id = ?});
+ $sth-&gt;execute($id);
+ while(my $data = $sth-&gt;fetchrow_hashref) {
+ }
+ # TL
+ my $sth = $DB-&gt;execute(q{SELECT * FROM test WHERE id = ?}, $id);
+ while(my $data = $sth-&gt;fetchHash) {
+ }</code></pre>
+
+<p>
+<span class="pod_lang">TLではprepare/executeは一括で行い、prepared statement は利用できない。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">INSERT・UPDATEは、以下のように置き換えられる。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code> # DBI
+ my $sth = $DB-&gt;prepare(q{INSERT INTO test VALUES (?, ?)});
+ my $ret = $sth-&gt;execute($id, $data);
+ # TL
+ my $sth = $DB-&gt;execute(q{INSERT INTO test VALUES (?, ?)}, $id, $data);
+ my $ret = $sth-&gt;ret;</code></pre>
+
+<p>
+<span class="pod_lang">prepare/executeを一括で行うのは同様であるが、executeの戻り値は$sthオブジェクトであり、影響した行数を取得するためには $sth-&gt;ret メソッドを呼ぶ必要がある。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">プレースホルダの型指定は以下のように行う。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code> # DBI
+ my $sth = $DB-&gt;prepare(q{SELECT * FROM test LIMIT ?});
+ $sth-&gt;bind_param(1, $limit, { TYPE =&gt; SQL_INTEGER });
+ $sth-&gt;execute;
+ # TL
+ my $sth = $DB-&gt;execute(q{SELECT * FROM test LIMIT ??}, [$limit, \'SQL_INTEGER']);</code></pre>
+
+<p>
+<span class="pod_lang">TLの拡張プレースホルダ（??で表記される）を利用し、配列のリファレンスの最後に型をスカラのリファレンスの形で渡す。
+拡張プレースホルダでは、複数の値を渡すことも可能である。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code> # DBI
+ my $sth = $DB-&gt;prepare(q{SELECT * FROM test LIMIT ?, ?});
+ $sth-&gt;bind_param(1, $limit, { TYPE =&gt; SQL_INTEGER });
+ $sth-&gt;bind_param(2, $offset, { TYPE =&gt; SQL_INTEGER });
+ $sth-&gt;execute;
+ # TL
+ my $sth = $DB-&gt;execute(q{SELECT * FROM test LIMIT ??}, [$limit, $offset, \'SQL_INTEGER']);</code></pre>
+
+<p>
+<span class="pod_lang">最後にINSERTした行のAUTO_INCREMENT値の取得などは、拡張ラッパでは制御できないので、DBIのハンドラを直接利用する。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code> # DBI
+ my $id = $DB-&gt;{mysql_insertid};
+ # TL
+ my $id = $DB-&gt;getDbh()-&gt;{mysql_insertid};</code></pre>
+
+<p>
+<span class="pod_lang">BEGIN/COMMIT/ROLLBACKはDBIとほぼ同様である。ただし、TLの場合はAutoCommitがデフォルトでONであり、トランザクションを開始する場合は専用のbeginメソッドを利用する。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code> # DBI
+ $DB-&gt;do(q{BEGIN WORK});
+ $DB-&gt;commit;
+ # TL
+ $DB-&gt;begin;    # $DB-&gt;execute(q{BEGIN WORK}) としてはならない
+ $DB-&gt;commit;</code></pre>
 
 <h2><a id="Xe6X8bXa1Xe5XbcXb5Xe3X83X97Xe3X83XacXe3X83XbcXe3X82Xb9Xe3X83X9bXe3X83XabXe3X83X80Xe8Xa9Xb3Xe7Xb4Xb0">
 <span class="pod_lang">拡張プレースホルダ詳細
@@ -1062,6 +1203,7 @@ Tripletail::DB - DBIのラッパ
 <li><a href="#item_X$TL->getDB">$TL-&gt;getDB</a></li>
 <li><a href="#item_X$TL->newDB">$TL-&gt;newDB</a></li>
 <li><a href="#AUTHOR_INFORMATION">AUTHOR INFORMATION</a></li>
+<li><a href="#DBIXe3X81X8bXe3X82X89Xe3X81XaeXe7Xa7XbbXe8Xa1X8c">DBIからの移行</a></li>
 <li><a href="#item_DBXe3X82Xb0Xe3X83XabXe3X83XbcXe3X83X97Xe3X83XbbDBXe3X82XbbXe3X83X83Xe3X83X88Xe3X83XbbDBXe3X82Xb3Xe3X83X8dXe3X82XafXe3X82Xb7Xe3X83Xa7Xe3X83Xb3">DBグループ・DBセット・DBコネクション</a></li>
 <li><a href="#DBXe3X82XbbXe3X83X83Xe3X83X88Xe3X83XbbDBXe3X82Xb3Xe3X83X8dXe3X82XafXe3X82Xb7Xe3X83Xa7Xe3X83Xb3">DBセット・DBコネクション</a></li>
 <li><a href="#DBXe5XaeX9aXe7XbeXa9">DB定義</a></li>
@@ -1106,11 +1248,13 @@ Tripletail::DB - DBIのラッパ
 <li><a href="#item_unlock">unlock</a></li>
 <li><a href="#item_user">user</a></li>
 <li><a href="#item_Xe3X83X97Xe3X83XacXe3X83XbcXe3X82Xb9Xe3X83X9bXe3X83XabXe3X83X80Xe3X81XaeXe5X80Xa4Xe6Xb8Xa1Xe3X81X97Xe3X81XaeXe9X9aX9bXe3X81XabXe5X9eX8bXe6X8cX87Xe5XaeX9aXe3X81X8cXe5X8fXafXe8X83Xbd">プレースホルダの値渡しの際に型指定が可能</a></li>
+<li><a href="#item_Xe3X83Xa9Xe3X83X83Xe3X83X91Xe3X81XabXe5X90X8cXe7XadX89Xe3X81XaeXe6Xa9X9fXe8X83XbdXe3X81X8cXe7X94Xa8Xe6X84X8fXe3X81X95Xe3X82X8cXe3X81Xa6Xe3X81X84Xe3X81XaaXe3X81X84Xe5Xa0Xb4Xe5X90X88Xe3X80X82">ラッパに同等の機能が用意されていない場合。</a></li>
 <li><a href="#item_Xe3X83XaaXe3X82XafXe3X82Xa8Xe3X82Xb9Xe3X83X88Xe5X87Xa6Xe7X90X86Xe5XaeX8cXe4XbaX86Xe5XbeX8cXe3X81XaeXe3X83X88Xe3X83Xa9Xe3X83Xb3Xe3X82Xb6Xe3X82XafXe3X82Xb7Xe3X83Xa7Xe3X83Xb3Xe6X9cXaaXe5XaeX8cXe4XbaX86Xe3X82X84unlockXe6X9cXaaXe5XaeX8cXe4XbaX86Xe3X82X92Xe8X87XaaXe5X8bX95Xe6Xa4X9cXe5X87Xba">リクエスト処理完了後のトランザクション未完了やunlock未完了を自動検出</a></li>
 <li><a href="#item_Xe5XaeX9fXe8Xa1X8cXe3X82XafXe3X82Xa8Xe3X83XaaXe3X81XaeXe5X87Xa6Xe7X90X86Xe6X99X82Xe9X96X93Xe3X83XbbXe5XaeX9fXe8Xa1X8cXe8Xa8X88Xe7X94XbbXe3X83XbbXe7Xb5X90Xe6X9eX9cXe3X82X92Xe8Xa8X98Xe9X8cXb2Xe3X81X99Xe3X82X8bXe3X83X87Xe3X83X90Xe3X83X83Xe3X82Xb0Xe3X83Xa2Xe3X83XbcXe3X83X89Xe3X80X82">実行クエリの処理時間・実行計画・結果を記録するデバッグモード。</a></li>
 <li><a href="#item_Xe6X8bXa1Xe5XbcXb5Xe3X83X97Xe3X83XacXe3X83XbcXe3X82Xb9Xe3X83X9bXe3X83XabXe3X83X80Xe6Xa9X9fXe8X83Xbd">拡張プレースホルダ機能</a></li>
 <li><a href="#Xe6X8bXa1Xe5XbcXb5Xe3X83X97Xe3X83XacXe3X83XbcXe3X82Xb9Xe3X83X9bXe3X83XabXe3X83X80Xe8Xa9Xb3Xe7Xb4Xb0">拡張プレースホルダ詳細</a></li>
 <li><a href="#item_Xe6X8eXa5Xe7Xb6X9a/Xe5X88X87Xe6X96XadXe3X81XafXe8X87XaaXe5X8bX95Xe3X81Xa7Xe8Xa1X8cXe3X82X8fXe3X82X8cXe3X82X8bXe3X80X82">接続/切断は自動で行われる。</a></li>
+<li><a href="#item_Xe9XabX98Xe9X80X9fXe3X81XaaXe5X87Xa6Xe7X90X86Xe3X81X8cXe5XbfX85Xe8Xa6X81Xe3X81Xa7Xe3X80X81Xe3X83Xa9Xe3X83X83Xe3X83X91Xe3X81XaeXe3X82XaaXe3X83XbcXe3X83X90Xe3X83X98Xe3X83X83Xe3X83X89Xe3X82X92Xe5X9bX9eXe9X81XbfXe3X81X97Xe3X81X9fXe3X81X84Xe5Xa0Xb4Xe5X90X88Xe3X80X82">高速な処理が必要で、ラッパのオーバヘッドを回避したい場合。</a></li>
 </ul>
 </div>
 <!-- End INDEX -->

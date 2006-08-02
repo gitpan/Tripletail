@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use UNIVERSAL qw(isa);
 
-our $VERSION = '0.11_01';
+our $VERSION = '0.12';
 
 our $TL = Tripletail->__new;
 our @specialization = ();
@@ -1886,9 +1886,9 @@ servers = localhost:11211
 
   #topはキャッシュするキー。画面毎にキーを設定する。ページャーなどを利用する場合、画面毎になる点を注意する（page-1等にする）
   #キャッシュにヒットした場合、時間を比較して、304でリダイレクトするか、メモリから読み込んで表示する
-  #returnした後にprintやflushなど出力する操作は不可なため注意する事
+  #printCacheUnlessModifiedでundefが返ってきた後は、printやflushなど出力する操作は不可なため注意する事
   return if(!defined($TL->printCacheUnlessModified('top')));
-  #キャッシュすることを宣言する。なお、宣言はprintCacheUnlessModifiedより後であれば、どの時点で行ってもかまわない
+  #キャッシュすることを宣言する。なお、宣言はprintCacheUnlessModifiedより後でprintより前であれば、どの時点で行ってもかまわない
   $TL->setCache('top');
 
   #実際のスクリプトを記述し、出力を行う
@@ -1904,7 +1904,7 @@ servers = localhost:11211
 
 =item 読み込み側例（ユーザー名等一部に固有の情報を埋め込んでいる場合）
 
-  #クッキーデータの取得、クッキーに固有の情報を入れておくと高速に動作出来る（DB等から読み込みTL:Formクラスにセットしても可）
+  #クッキーデータの取得、クッキーに固有の情報を入れておくと高速に動作出来る（DB等から読み込みTripletail::Formクラスにセットしても可）
   my $cookiedata = $TL->getCookie->get('TLTEST');
   $cookiedata->set('<&NAME>' => $name) if(!$cookiedata->exists('name'));
   $cookiedata->set('<&POINT>' => $point) if(!$cookiedata->exists('point'));
