@@ -14,9 +14,9 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 d1090977467fd8670e9569f25b64ccad6953942a Changes
+SHA1 9411e55944a151c09f80885143cbaf137548a247 Changes
 SHA1 02c60575c08e2ed69e96c54075dc8e7cd796b96d MANIFEST
-SHA1 11834659a2e9f5f7a453aab3b931a4dda3dbdc0d META.yml
+SHA1 b8e29464dfcbd9ba643aaab3f7ce7c4292ba3130 META.yml
 SHA1 79824ff0a2dfe3e25ed5174037b3e1bc68641da1 Makefile.PL
 SHA1 e786b542b8e580dbd2c4f5cf10817b1119a5cd10 README
 SHA1 3372d98561286347582c0cea112de3680181e943 data/jpholiday.pl
@@ -90,7 +90,7 @@ SHA1 bbf0b31b20996227c289aa3df4ed2450e17bbe64 ext/Tripletail-SMIME/t/smime.more.
 SHA1 5c544a31b9b48e50c05d32554aada671ff090a62 ext/Tripletail-SMIME/t/smime.t
 SHA1 47b320be9a64bccd36951b887c3ab5afd2e16f9d ext/Tripletail-SMIME/typemap
 SHA1 b356fdad645f03bdf8f46a18ff25f65e7155b344 inc/ExtUtils/MY_Metafile.pm
-SHA1 ce6c39495709a77f93cb31589e2ab68a4e7f3249 lib/Tripletail.pm
+SHA1 add3347eb8dbc9b9992ffe48eb116294ea42a98e lib/Tripletail.pm
 SHA1 56402723242e61683c46a3594d4a7a2b427e82bf lib/Tripletail/CSV.pm
 SHA1 c41555e2617c51fc651f13dc4182eaeebabc5a87 lib/Tripletail/CharConv.pm
 SHA1 92542d8719d29f0c1263dd6937bab735f744a8f8 lib/Tripletail/Cookie.pm
@@ -104,7 +104,7 @@ SHA1 0be2853f9164e5123bf9d566be872b56262d4dcf lib/Tripletail/FileSentinel.pm
 SHA1 5e0bed87cfce4f337eca398084d2233f7951fdda lib/Tripletail/Filter.pm
 SHA1 835401874a0ea6cfd39b260351eeec03185bb41a lib/Tripletail/Filter/Binary.pm
 SHA1 0b092c45492eeca4c5230b3ca67bedf9c229d0e3 lib/Tripletail/Filter/CSV.pm
-SHA1 6cb6d81e531d7babdc8f05c3c11d3a80ffa53cba lib/Tripletail/Filter/HTML.pm
+SHA1 c417f50d62ae2bb957f60b29f3abecb017a3885b lib/Tripletail/Filter/HTML.pm
 SHA1 1abfa65728eefed90372821efbf618330b2b880f lib/Tripletail/Filter/HeaderOnly.pm
 SHA1 2d1981ce71de63d2ac1879a0d054dbbbac1d6c3d lib/Tripletail/Filter/MemCached.pm
 SHA1 cb56ff7a6caa8e86adfb421f20ce014e095fe7a9 lib/Tripletail/Filter/MobileHTML.pm
@@ -193,7 +193,7 @@ SHA1 0190346d7072d458c8a10a45c19f86db641dcc48 t/pod.t
 SHA1 00b2239ffb4f7a5964502792aff3a22a4f754979 t/rawcookie.t
 SHA1 7b6558367559bf0306c5bab8a4da77b6c27bd9bd t/rawcookie2.t
 SHA1 433d57127e8dc98a8acaaeabdc06cc7dbc7a1e90 t/server.t
-SHA1 7e4f44cb1e14a6e40959e0b3bca765f7d1f18d5a t/server_filter.t
+SHA1 79c6a377a04bb2f98d8a6e9629232f02e0d22b4f t/server_filter.t
 SHA1 83e3923e7eb57f5ce7930249215747839e9d33ef t/server_memcache.t
 SHA1 e6f373d97ef4addf22d92c0f78ea797c6b971bd4 t/server_session.t
 SHA1 54efd546c8d8c0581b439f5e09977b72cab67872 t/tagcheck.t
@@ -210,7 +210,7 @@ SHA1 15f1d011d0ce3b8c62d9f8c5bbdee7dc5d8806a6 t/value.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.2.4 (GNU/Linux)
 
-iD8DBQFGCNkIewjCT38k4dkRAuVDAJ9IYp3te6RbeqqCM4JKik5Zqj2dCACfd7Tq
-j56/CUw/wLn6lLUkAqNn8m8=
-=5whD
+iD8DBQFGCSEuewjCT38k4dkRAmB/AJ92huTCDvgRCfB0xE+wzXOHA3gbFQCfXc4t
+ykOoVndt0swWqFi6BtARzWg=
+=eKAz
 -----END PGP SIGNATURE-----
