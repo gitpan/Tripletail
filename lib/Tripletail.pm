@@ -10,7 +10,7 @@ use UNIVERSAL qw(isa);
 use File::Spec;
 use Data::Dumper;
 
-our $VERSION = '0.27_02';
+our $VERSION = '0.27_03';
 
 our $TL = Tripletail->__new;
 our @specialization = ();
@@ -86,6 +86,7 @@ sub PreloadModperl
 {
 	require Apache2::RequestRec;
 	require Apache2::RequestIO;
+	require Apache2::RequestUtil;
 	require Apache2::Const;
 	Apache2::Const->import(-compile => qw(OK REDIRECT));
 	require APR::Table;
