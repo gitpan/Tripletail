@@ -1,6 +1,7 @@
 # -----------------------------------------------------------------------------
 # TL - Tripletailメインクラス
 # -----------------------------------------------------------------------------
+# $Id: Tripletail.pm,v 1.194 2007/06/15 03:39:52 hio Exp $
 package Tripletail;
 use strict;
 use warnings;
@@ -9,13 +10,18 @@ BEGIN{ our $_CHKDYNALDR=$INC{'DynaLoader.pm'} }
 use UNIVERSAL qw(isa);
 use File::Spec;
 use Data::Dumper;
+use Cwd ();
 
-our $VERSION = '0.27_03';
+our $VERSION = '0.28';
 
 our $TL = Tripletail->__new;
 our @specialization = ();
 our $LOG_SERIAL = 0;
 our $LASTERROR;
+our %_FILE_CACHE;
+my $_FILE_CACHE_MAXSIZE = 10_1024*1024;
+my $_FILE_CACHE_CURSIZE = 150; # variables for caching.
+our $CWD;
 
 require Unicode::Japanese;
 
@@ -54,7 +60,13 @@ sub import {
 				or die "use Tripletail, ARG[1]: not defined. Usage: \"use Tripletail qw(config.ini);\"\n";
 			$inifile = '/dev/null';
 		}
-		$TL->{INI} = $TL->newIni($inifile);
+		if( $inifile ne '/dev/null' && $inifile ne 'nul' )
+		{
+			$TL->{INI} = $TL->newIni($inifile);
+		}else
+		{
+			$TL->{INI} = $TL->newIni();
+		}
 		$TL->{INI}->const;
 		
 		if(defined($_[0])) {
@@ -173,6 +185,8 @@ sub __new {
 
 	$this->{encode_is_available} = undef; # undef: 不明  0: Encode利用不可  1: Encode利用可
 
+    $this->{fcgi_request} = undef; # FCGI または undef
+
 	$this;
 }
 
@@ -192,6 +206,31 @@ sub CGI {
 sub INI {
 	my $this = shift;
 	$this->{INI};
+}
+
+sub fork {
+    my $this = shift;
+
+    if ($this->{fcgi_request}) {
+        $this->{fcgi_request}->Detach;
+    }
+
+    my $pid = CORE::fork();
+    
+    if (not defined $pid) {
+        die "fork failed: $!";
+    }
+    elsif ($pid == 0) {
+        # child
+    }
+    else {
+        # parent
+        if ($this->{fcgi_request}) {
+            $this->{fcgi_request}->Attach;
+        }
+    }
+
+    return $pid;
 }
 
 sub escapeTag {
@@ -341,6 +380,7 @@ sub startCgi {
 	my $this = shift;
 	my $param = { @_ };
 	
+	$this->_clearCwd();
 	$this->{outputbuffering} = $this->INI->get(TL => 'outputbuffering', 0);
 
 	my $main_err;
@@ -363,12 +403,6 @@ sub startCgi {
 			} elsif (ref($group) eq 'ARRAY') {
 				Tripletail::DB->_connect($group);
 			}
-		}
-
-		if(defined(my $groups = $param->{-Session})) {
-			require Tripletail::Session;
-
-			Tripletail::Session->_init($groups);
 		}
 
 		if(!defined($param->{'-main'})) {
@@ -394,7 +428,6 @@ sub startCgi {
 			$this->getFileSentinel->__install;
 		}
 
-		$this->__executeHook('init');
 
 		if($this->_getRunMode eq 'FCGI') {
 			# FCGIモード
@@ -405,6 +438,7 @@ sub startCgi {
 
 			do {
 				local $SIG{__DIE__} = 'DEFAULT';
+				#no warnings;
 				eval 'use FCGI';
 			};
 			if($@) {
@@ -414,26 +448,46 @@ sub startCgi {
 			my $exit_requested;
 			my $handling_request;
 			local $SIG{USR1} = sub {
+				$this->log("SIGUSR1 received");
 				$exit_requested = 1;
-				die "SIGUSR1 received\n";
 			};
 			local $SIG{TERM} = sub {
+				# NB: FCGIモードでは、fastcgiマネージャから
+				#     SIGTERMが送られてくる為、
+				#     状況に応じて挙動を変更する(以下を参照)
+				# http://d.tir.jp/pw?mod_fastcgi の一番下
+				# https://192.168.0.17/mantis/view.php?id=1037
+				$this->log("SIGTERM received");
 				$exit_requested = 1;
-				die "SIGTERM received\n";
 			};
 			local $SIG{PIPE} = 'IGNORE';
 
-			my $request = FCGI::Request(
-				\*STDIN, \*STDOUT, \*STDERR, \%ENV,
-				0, FCGI::FAIL_ACCEPT_ON_INTR());
+			{
+				#no warnings;
+				$this->{fcgi_request} = FCGI::Request(
+					\*STDIN, \*STDOUT, \*STDERR, \%ENV,
+					0, FCGI::FAIL_ACCEPT_ON_INTR());
+			}
 
 			while(1) {
 				my $accepted = eval {
-					$request->Accept() >= 0;
+					#no warnings;
+					local $SIG{__DIE__} = 'DEFAULT';
+					local $SIG{USR1} = sub {
+						$exit_requested = 1;
+						die("SIGUSR1 received\n");
+					};
+					local $SIG{TERM} = sub {
+						$exit_requested = 1;
+						die("SIGTERM received\n");
+					};
+					$this->{fcgi_request}->Accept() >= 0;
 				};
 				if($@) {
 					if($exit_requested) {
 						$this->log(FCGI => "FCGI_request->Accept() interrupted : $@");
+						#no warnings;
+						$this->{fcgi_request}->Finish();
 						last;
 					}else {
 						$this->log(FCGI => "FCGI_request->Accept() failed : $@");
@@ -445,23 +499,50 @@ sub startCgi {
 					last;
 				}
 
+				if( $requestcount==0 )
+				{
+					# 最初のリクエスト受信時でプロセスの初期化.
+					if(defined(my $groups = $param->{-Session})) {
+						require Tripletail::Session;
+
+						Tripletail::Session->_init($groups);
+					}
+					$this->__executeHook('init');
+				}
+				
 				$this->__executeCgi($param->{-main});
 				$main_err = $@;
 
-				$request->Flush;
+				{
+					#no warnings;
+					$this->{fcgi_request}->Flush;
+				}
 
 				$requestcount++;
 
 				if($exit_requested || ($maxrequestcount && ($requestcount >= $maxrequestcount))) {
 					last;
 				}
+				$this->{fcgi_restart} and last;
 			}
-			$request->Finish;
+			{
+				#no warnings;
+				$this->{fcgi_request}->Finish;
+			}
+            $this->{fcgi_request} = undef;
 
-			$this->log(FCGI => 'FCGI Loop terminated.');
+			$this->log(FCGI => "FCGI Loop terminated ($requestcount reqs processed).");
 		} else {
 			# CGIモード
 			$this->log(TL => 'CGI mode');
+			
+			# プロセスの初期化.
+			if(defined(my $groups = $param->{-Session})) {
+				require Tripletail::Session;
+
+				Tripletail::Session->_init($groups);
+			}
+			$this->__executeHook('init');
 
 			$this->__executeCgi($param->{-main});
 			$main_err = $@;
@@ -499,6 +580,13 @@ sub startCgi {
 		$this;
 	}
 }
+
+sub _fcgi_restart
+{
+	my $this = shift;
+	@_ and $this->{fcgi_restart} = shift;
+	$this->{fcgi_restart};
+} 
 
 sub trapError {
 	my $this = shift;
@@ -1304,7 +1392,7 @@ sub getDebug {
 	my $this = shift;
 
 	require Tripletail::Debug;
-
+	
 	Tripletail::Debug->_getInstance(@_);
 }
 
@@ -1490,6 +1578,79 @@ sub charconv {
 	Tripletail::CharConv->_getInstance()->_charconv(@_);
 }
 
+# -----------------------------------------------------------------------------
+# ファイル関連.
+# -----------------------------------------------------------------------------
+
+sub _filecacheMax
+{
+	my $this = shift;
+	@_ and $_FILE_CACHE_MAXSIZE = shift;
+	$_FILE_CACHE_MAXSIZE;
+}
+
+sub _filecacheMemorySize
+{
+	$_FILE_CACHE_CURSIZE;
+}
+
+sub _fetchFileCache
+{
+	my $this = shift;
+	my $fpath = shift;
+	
+	my $now = time;
+	
+	my ($inode, $size, $mtime);
+	
+	if( my $cache = $_FILE_CACHE{$fpath} )
+	{
+		if( $cache->{fetch_at}==$now )
+		{
+			return $cache;
+		}
+		
+		my @st = stat($fpath);
+		@st or die __PACKAGE__."#_fetchFileCache, Failed to stat file [$fpath]: $!\n";
+		($inode, $size, $mtime) = @st[1, 7, 9];
+		if( $inode==$cache->{inode} && $size==$cache->{size} && $mtime==$cache->{mtime} )
+		{
+			$cache->{fetch_at} = $now;
+			return $cache;
+		}
+		
+		# unload.
+		$_FILE_CACHE_CURSIZE -= $cache->{cache_size};
+		delete $_FILE_CACHE{$fpath};
+	}else
+	{
+		my @st = stat($fpath);
+		@st or die __PACKAGE__."#_fetchFileCache, Failed to stat file [$fpath]: $!\n";
+		($inode, $size, $mtime) = @st[1, 7, 9];
+	}
+	
+	my $cache = {
+		inode => $inode,
+		size  => $size,
+		mtime => $mtime,
+		path  => $fpath,
+		data  => undef,
+		text  => undef,
+		
+		fetch_at   => $now,
+		cache_size => 312 + 24*5 + (25+length($fpath)) + 12*2,
+	};
+	if( $mtime < $now )
+	{
+		$_FILE_CACHE{$fpath} = $cache;
+		$_FILE_CACHE_CURSIZE += $cache->{cache_size};
+	}else
+	{
+		$cache->{cache_size} = undef;
+	}
+	$cache;
+}
+
 sub readFile {
 	my $this = shift;
 	my $fpath = shift;
@@ -1500,11 +1661,21 @@ sub readFile {
 		die __PACKAGE__."#readFile, ARG[1] was a Ref. [$fpath]\n";
 	}
 
-	open my $fh, '<', $fpath
-	  or die __PACKAGE__."#readFile, Failed to read file [$fpath]: $!\n";
+	my $cache = $this->_fetchFileCache($fpath);
+	if( !defined($cache->{data}) )
+	{
+		open my $fh, '<', $fpath
+			or die __PACKAGE__."#readFile, Failed to read file [$fpath]: $!\n";
 
-	local $/ = undef;
-	<$fh>;
+		local $/ = undef;
+		$cache->{data} = <$fh>;
+		if( $cache->{cache_size} )
+		{
+			$cache->{cache_size} += 25 + length($cache->{data});
+			$_FILE_CACHE_CURSIZE  += 25 + length($cache->{data});
+		}
+	}
+	$cache->{data};
 }
 
 sub readTextFile {
@@ -1513,12 +1684,33 @@ sub readTextFile {
 	my $coding = shift;
 	my $prefer_encode = shift;
 
-	$this->charconv(
-		$this->readFile($fpath),
-		$coding,
-		'utf8',
-		$prefer_encode,
-	);
+	my $cache = $this->_fetchFileCache($fpath);
+	if( !defined($cache->{text}) )
+	{
+		$cache->{text} = $this->charconv(
+			$this->readFile($fpath),
+			$coding,
+			'utf8',
+			$prefer_encode,
+		);
+		if( $cache->{cache_size} )
+		{
+			$cache->{cache_size} += 25 + length($cache->{text});
+			$_FILE_CACHE_CURSIZE += 25 + length($cache->{text});
+		}
+		
+		# rawデータは使わないと思うので削除.
+		if( defined($cache->{data}) )
+		{
+			if( $cache->{cache_size} )
+			{
+				$cache->{cache_size} -= 25 + length($cache->{data});
+				$_FILE_CACHE_CURSIZE -= 25 + length($cache->{data});
+			}
+			delete $cache->{data};
+		}
+	}
+	$cache->{text};
 }
 
 sub writeFile {
@@ -1568,6 +1760,9 @@ sub writeTextFile {
 	);
 }
 
+# -----------------------------------------------------------------------------
+# --
+# -----------------------------------------------------------------------------
 sub watch {
 	my $this = shift;
 
@@ -1890,6 +2085,15 @@ sub __flushContentFilter {
 	print $str;
 }
 
+sub _cwd
+{
+	$CWD ||= Cwd::cwd;
+}
+sub _clearCwd
+{
+	$CWD = undef;
+}
+
 __END__
 
 =encoding utf-8
@@ -2116,6 +2320,9 @@ FastCGIとしてプログラムを動作させるモード。httpdからfcgiス�
 が発生しているとして自動的に終了する。また、 L<Ini|Tripletail::Ini> パラメータ付きで
 C<use Tripletail> したスクリプトファイルや、その L<Ini|Tripletail::Ini> ファイルの最終更新時刻
 も監視し、更新されていたら自動的に終了する。
+
+このモードでは fork が正しく動作しない事に注意。代わりに
+L<< $TL->fork|/"fork" >> メソッドを使用する。
 
 =item 一般スクリプトモード
 
@@ -2464,6 +2671,22 @@ C<< use Tripletail qw(filename.ini); >> で読み込まれた L<Tripletail::Ini>
 L</"Main関数"> がdieした場合は、エラー内容が標準エラーへ出力される。
 
 L</"startCgi"> と同様に、C<DB> には配列へのリファレンスを渡す事も出来る。
+
+=head4 C<< fork >>
+
+  if (my $pid = $TL->fork) {
+      # parent
+  }
+  else {
+      # child
+  }
+
+FastCGI 環境を考慮しながら fork を実行する。FastCGI 環境でない場合は通
+常通りに fork する。fork に失敗した場合は die する。
+
+通常は perl 組込み関数である fork を使用しても問題無いが、FastCGI 環境
+では正常に動作しない為、Tripletail アプリケーションは常に fork でなく
+C<< $TL->fork >> を使用する事が推奨される。
 
 =head4 C<< log >>
 

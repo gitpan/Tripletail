@@ -314,6 +314,11 @@ Tripletail - Tripletail, Framework for Japanese Web Application
 
 </span></a>
 </li>
+<li><a href="#fork">
+<span class="pod_lang"><code class="pod_iseq_C">fork</code>
+
+</span></a>
+</li>
 <li><a href="#log">
 <span class="pod_lang"><code class="pod_iseq_C">log</code>
 
@@ -856,6 +861,13 @@ servers = localhost:11211
 が発生しているとして自動的に終了する。また、 <a href="././Tripletail/Ini.html">Ini</a> パラメータ付きで
 <code class="pod_iseq_C">use Tripletail</code> したスクリプトファイルや、その <a href="././Tripletail/Ini.html">Ini</a> ファイルの最終更新時刻
 も監視し、更新されていたら自動的に終了する。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">このモードでは fork が正しく動作しない事に注意。代わりに
+<a href="#fork">$TL-&gt;fork</a> メソッドを使用する。
 
 </span>
 </p>
@@ -1609,6 +1621,33 @@ $valueがundefの場合、defaultを指定していた場合、defaultに設定�
 
 <p>
 <span class="pod_lang"><a href="#startCgi">&quot;startCgi&quot;</a> と同様に、<code class="pod_iseq_C">DB</code> には配列へのリファレンスを渡す事も出来る。
+
+</span>
+</p>
+
+<h4><a id="fork">
+<span class="pod_lang"><code class="pod_iseq_C">fork</code>
+
+</span></a></h4>
+
+<pre class="pod_verbatim"><code>  if (my $pid = $TL-&gt;fork) {
+      # parent
+  }
+  else {
+      # child
+  }</code></pre>
+
+<p>
+<span class="pod_lang">FastCGI 環境を考慮しながら fork を実行する。FastCGI 環境でない場合は通
+常通りに fork する。fork に失敗した場合は die する。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">通常は perl 組込み関数である fork を使用しても問題無いが、FastCGI 環境
+では正常に動作しない為、Tripletail アプリケーションは常に fork でなく
+<code class="pod_iseq_C">$TL-&gt;fork</code> を使用する事が推奨される。
 
 </span>
 </p>
@@ -3120,6 +3159,7 @@ Tripletail - Tripletail, Framework for Japanese Web Application
 <li><a href="#escapeSqlLike">escapeSqlLike</a></li>
 <li><a href="#escapeTag">escapeTag</a></li>
 <li><a href="#file-update">file-update</a></li>
+<li><a href="#fork">fork</a></li>
 <li><a href="#getContentFilter">getContentFilter</a></li>
 <li><a href="#getCookie">getCookie</a></li>
 <li><a href="#getCsv">getCsv</a></li>
