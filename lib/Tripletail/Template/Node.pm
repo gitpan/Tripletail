@@ -448,10 +448,14 @@ sub __popform
 	# 指定されたkeyの先頭の値を取り出し、それを消す。
 	my $form = shift;
 	my $key  = shift;
-
+	
 	my @array = $form->getValues($key);
+	if( !@array )
+	{
+		return '';
+	}
+	
 	my $val = shift @array;
-
 	$form->remove($key => $val);
 	$val;
 }

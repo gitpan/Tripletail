@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # TL - Tripletailメインクラス
 # -----------------------------------------------------------------------------
-# $Id: Tripletail.pm,v 1.194 2007/06/15 03:39:52 hio Exp $
+# $Id: Tripletail.pm,v 1.197 2007/07/19 07:26:29 hio Exp $
 package Tripletail;
 use strict;
 use warnings;
@@ -12,7 +12,7 @@ use File::Spec;
 use Data::Dumper;
 use Cwd ();
 
-our $VERSION = '0.29';
+our $VERSION = '0.29_02';
 
 our $TL = Tripletail->__new;
 our @specialization = ();
@@ -222,6 +222,17 @@ sub fork {
     }
     elsif ($pid == 0) {
         # child
+        
+        if ($this->{fcgi_request}) {
+            # 何故か FCGI::DESTROY を殺して置かないと、子プロセスの方が早く死んだ
+            # 時に Internal Server Error になってしまう。
+            # http://wiki.dreamhost.com/Perl_FastCGI
+            *FCGI::DESTROY = sub {};
+        }
+        
+        require Tripletail::DB;
+
+        Tripletail::DB::_reconnectSilentlyAll();
     }
     else {
         # parent

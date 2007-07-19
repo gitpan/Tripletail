@@ -39,6 +39,30 @@ sub _getInstance {
 	$obj;
 }
 
+sub _reconnectSilentlyAll {
+    # fork された後、子プロセス側で呼ばれる。現在 $INSTANCES に保存されている
+    # DBI-dbh は全て親と共有されているので、それら全ての InactiveDestroy フラグを
+    # 立ててから接続し直さなければならない。
+    foreach my $db (values %$INSTANCES) {
+        $db->_reconnectSilently;
+    }
+
+    return;
+}
+
+sub _reconnectSilently {
+    my $this = shift;
+
+    # 全ての DB コネクションの InactiveDestroy フラグを立ててから再接続する。
+    foreach my $dbh (values %{$this->{dbname}}) {
+        $dbh->getDbh->{InactiveDestroy} = 1;
+        $dbh->connect($this->{type});
+    }
+    $this->{tx_state} = _TX_STATE_NONE;
+
+    $this;
+}
+
 sub connect {
 	my $this = shift;
 
