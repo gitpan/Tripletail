@@ -14,15 +14,15 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 ecd4f3d6b5b2099aabaed5d9db8263f6a3b3f58a Changes
+SHA1 77326805440cfa099499b0ebecd048bbd1202f7f Changes
 SHA1 14c183a9fc9953d6fb09e11ece72dd320ba75760 MANIFEST
-SHA1 08e41f47dc925651f9c543b8f5ea52c0bd65f1bf META.yml
+SHA1 488e1f5a87b4b1d33d9802429c52d4bda812cff0 META.yml
 SHA1 9a7eccefbb441f7eb569bc15eeb05cd5409c11c2 Makefile.PL
 SHA1 e786b542b8e580dbd2c4f5cf10817b1119a5cd10 README
 SHA1 b7ff309a4eb7d58903ba886a0cce95a20cb3fb2d bin/tltail.pl
 SHA1 3372d98561286347582c0cea112de3680181e943 data/jpholiday.pl
 SHA1 db3d47690370d79241de1d4c5bf776a90dbdff21 doc/Makefile.PL
-SHA1 4413a1ba4ee0b989c97bbdf0adb6f8510ab29491 doc/Tripletail.html
+SHA1 368e7b78b8ae5b64d7cb761f9d5a7ce6dd2f946c doc/Tripletail.html
 SHA1 94ccfa7de528454ad574b9be05b530cdf96d77ba doc/Tripletail/CSV.html
 SHA1 6c0000ae07da9b7fe2df02f4c5841a813fb0ab2b doc/Tripletail/CharConv.html
 SHA1 b6331b7f2c9bf39ae38523bde5c0b65d3ac45d6c doc/Tripletail/Cookie.html
@@ -54,7 +54,7 @@ SHA1 d3802512372c148637eea9b778b4beb7ff9e9114 doc/Tripletail/InputFilter/SEO.htm
 SHA1 d4a9e5060774d94cd42bf60777de1574b979349c doc/Tripletail/Mail.html
 SHA1 475e5760192cf0c5bf5ef175e24c8ed02ee2ff98 doc/Tripletail/MemCached.html
 SHA1 1bcd41477b7525cfbbf9aa358a072db164f0626f doc/Tripletail/MemorySentinel.html
-SHA1 54d83a28555e3a8219c4addc5ac19e72134a27d2 doc/Tripletail/Pager.html
+SHA1 3240c87ac46db9a5db5951600fa5b8d7acf2afc1 doc/Tripletail/Pager.html
 SHA1 2815c9a074dc1dee44272f764657a7282fe0592b doc/Tripletail/RawCookie.html
 SHA1 7c808cdad6f21cfe7deeac58fc11b28f25c685be doc/Tripletail/Sendmail.html
 SHA1 80ab7aa0f9df6dd7882880cf1b4fbd2f7c088fca doc/Tripletail/Sendmail/Esmtp.html
@@ -65,10 +65,10 @@ SHA1 3e6db818a0533db7cc6c92df8f1ad81ad8b265e3 doc/Tripletail/Session.html
 SHA1 f2c6ed6842ea7c7348c92bd6d83a24ed45525d4d doc/Tripletail/TagCheck.html
 SHA1 4780c342958a8b85120163d28171f3651efd9f70 doc/Tripletail/Template.html
 SHA1 5bf5ddd64783112035200724d26c1ac530d0b58e doc/Tripletail/Template/Node.html
-SHA1 6eadbe8f94c494df88863f82e1c4b3d4ad5f5d3f doc/Tripletail/Validator.html
+SHA1 612e7fc806a991bf4e47ef9a04be668075e18ed8 doc/Tripletail/Validator.html
 SHA1 77dcc6773e55ed1cc100a818227fb506dd634335 doc/Tripletail/Validator/Filter.html
 SHA1 dd9d2f10d7aaa9183272039f0fd04ab34b59b91b doc/Tripletail/Validator/FilterFactory.html
-SHA1 8dd77e66a260ad359ddaeca3344ac886d26f9a8f doc/Tripletail/Value.html
+SHA1 80a62319640aa5c8e1c25e674cb7139effbd1063 doc/Tripletail/Value.html
 SHA1 5b6125815f9d58c5056669b9fb72d869f5c556bd doc/frame.html
 SHA1 4af607c236faf431f9af9fe2a2ffe417e41480dc doc/menu.css
 SHA1 ef1dd296c801b1b03e69e57a7e8e661072d0fafa doc/menu.html
@@ -84,7 +84,7 @@ SHA1 38f36aa2487a43980fc040864d3360599a461d62 ext/Tripletail-HtmlFilter/HtmlFilt
 SHA1 99ad1fb95fc2b4251af033107dcfdbc35ae0a3e3 ext/Tripletail-HtmlFilter/HtmlFilter.xs
 SHA1 f21aebc46af53621b9f798591429b36526048984 ext/Tripletail-HtmlFilter/Makefile.PL
 SHA1 4817b47c23e2b097480e7c08967a293f8a03f773 inc/ExtUtils/MY_Metafile.pm
-SHA1 0a37b36b52204a0f043935c30210a6eea9f89f74 lib/Tripletail.pm
+SHA1 bbe675bbca6692701089c6aac8dfff0854e8f2f0 lib/Tripletail.pm
 SHA1 4779ff05bbb571837351d033b368e6f7a8a1d9b1 lib/Tripletail/CSV.pm
 SHA1 5ca1611b7af397aa70d0ad6a50588caf48f768e0 lib/Tripletail/CharConv.pm
 SHA1 0c4c4829d32dfcca2d30077e6c7f27a7b5955a14 lib/Tripletail/Cookie.pm
@@ -109,27 +109,27 @@ SHA1 8b76a45e66978427cdd1b9466d997b60f185886a lib/Tripletail/HtmlMail.pm
 SHA1 8332179416ad406b1a252057da5c6b858db63037 lib/Tripletail/Ini.pm
 SHA1 c9a271d0f3e1bb50c1322530eefb55f827f39a92 lib/Tripletail/InputFilter.pm
 SHA1 2bcfefda57b05b92ebb8f7be860b3284852a1ba1 lib/Tripletail/InputFilter/HTML.pm
-SHA1 bcc0726520a22a05e77321a233901942f6b70021 lib/Tripletail/InputFilter/MobileHTML.pm
+SHA1 3b755b1af6167d4b1114db016ba8b7947132a14b lib/Tripletail/InputFilter/MobileHTML.pm
 SHA1 9264c610bc5dc9e65a998592166e5857cdcbfcd6 lib/Tripletail/InputFilter/Plain.pm
 SHA1 802f45eb362c7dfeb2a3638a596fadad3b95836e lib/Tripletail/InputFilter/SEO.pm
 SHA1 12c8d32d3b043e9253cdd7880cb7f35c1397154f lib/Tripletail/Mail.pm
 SHA1 cf1abe385be3917b150b7f29a2f4e1b5adb6a28d lib/Tripletail/MemCached.pm
-SHA1 c7f4869df4f55ec518dd92758a0d9af035244605 lib/Tripletail/MemorySentinel.pm
-SHA1 5b865e8756f7710d9f6fcc32584c283da1d0391d lib/Tripletail/Pager.pm
+SHA1 85db9427cc9d29f8684470d68bf9eef8e2d01508 lib/Tripletail/MemorySentinel.pm
+SHA1 8c2ec4fc7afd1a0bb9d037b46fa2dddea4751133 lib/Tripletail/Pager.pm
 SHA1 4921c7cbd30f5ff6507871acf2b69183f925338f lib/Tripletail/RawCookie.pm
 SHA1 98306bb3c8a2e7dc31ebd07f40304d80d005159b lib/Tripletail/Sendmail.pm
 SHA1 6bb706ea6a77450c96a8f8d0f031d6445530c257 lib/Tripletail/Sendmail/Esmtp.pm
 SHA1 3355e3cf9eeb99b2bcee09959f4615422b9d2b45 lib/Tripletail/Sendmail/MailQueue.pm
 SHA1 85ca0971c582249ba5d49693f456008f9f185fe9 lib/Tripletail/Sendmail/Sendmail.pm
-SHA1 53dd88ee68053728dc94f4dd7855ff41dd0725fe lib/Tripletail/Sendmail/Smtp.pm
+SHA1 24022347c483938568d8e7d62bbfce5abb869342 lib/Tripletail/Sendmail/Smtp.pm
 SHA1 2bc4befcc36fc601e0e6964fd3edc167c56e7053 lib/Tripletail/Session.pm
 SHA1 84193c1246d9ae302b7ac65313e378655cb120b1 lib/Tripletail/TagCheck.pm
 SHA1 4fd17e746faa096e2aa5df1738d977f7b08b46f5 lib/Tripletail/Template.pm
 SHA1 338f86927502b2917f9dc0c059210d943a5b78a5 lib/Tripletail/Template/Node.pm
-SHA1 62d45d7d31c79f66cea237c856ea4329885541be lib/Tripletail/Validator.pm
-SHA1 113b539143b9f534e00ab682699b262b17b72f9f lib/Tripletail/Validator/Filter.pm
+SHA1 db8659fb1aa2d548aa716368c93e2fe2ce07d052 lib/Tripletail/Validator.pm
+SHA1 e482a851eb2c51ceb4e6255186bad9083e40bd5a lib/Tripletail/Validator/Filter.pm
 SHA1 597cd14d74e1b45c1bbfd079645cd8fbdf2b74a3 lib/Tripletail/Validator/FilterFactory.pm
-SHA1 58a0522f65dd2565ff6fe947778532f4d0805b62 lib/Tripletail/Value.pm
+SHA1 3399cbeb7886400d729d085b490d137a1ff288a0 lib/Tripletail/Value.pm
 SHA1 7f1aaf19929ad09dbc290d94281836a479ca7499 sample/README
 SHA1 c046ca07789c954dc890da3a26251f1ce7f33a50 sample/basic/csvdownload.cgi
 SHA1 b59884bcd5a6ca0afeee1dafd2d14e65c7ebbf2b sample/basic/csvdownload.ini
@@ -180,9 +180,9 @@ SHA1 2e7c25245ec836d4fa41ca3fb02a2a643ad2933c t/form.t
 SHA1 6b5a9ee2567e39174c560948dfc5a4a0cd9138a4 t/htmlfilter.t
 SHA1 badaf1c17ac4339dadddf53b501505de677c12b9 t/ini.t
 SHA1 aca331135aa4cf14b62260c50346627f53d4d1f3 t/mail.t
-SHA1 acee380be78a7ae9f8056ac0fa8f91768bc9dabb t/make_ini.pm
+SHA1 66e9399f00dc85a35fad21e2ce55aa742d933ccc t/make_ini.pm
 SHA1 69b0ab408298f7cd1b5649721366e4e56e8030a3 t/memcache.t
-SHA1 852340d97d7118468429b561d1a8b80eac9f21e5 t/pager.t
+SHA1 9daf1567f422aff970a20b5f6982cb1b06a504aa t/pager.t
 SHA1 bb0a8f526f2dbb4b54d73d2d2708b498e9ecfef6 t/pod-coverage.t
 SHA1 f6854270c1d3b58f4b918307effd87cde3f2abfb t/pod.t
 SHA1 88626a37ee7dbdcfb14e3fc9ab983d51b58a7184 t/rawcookie.t
@@ -196,20 +196,20 @@ SHA1 f70ec4c5c763934ea4629ad9a8598ea3d56b16ee t/server_session_sqlite.t
 SHA1 1385440b939457412afd5468bf57d06ea663ff7d t/tagcheck.t
 SHA1 10e013b9b4defe552a86edbfc43b9b47b3b5a49c t/template.t
 SHA1 dbdcb31ba2366a4ab3a11b814528ec80fb800dfa t/test_server.pm
-SHA1 558ae83e3cc832b32c8d16d0ee6070a83b0144ce t/tl-faulthandler.t
+SHA1 396ceb36f31a31a8ce8102fbd3dd052cb48bef2a t/tl-faulthandler.t
 SHA1 a29ced2867d2800c467f2b087fb19fbe679df333 t/tl.t
 SHA1 eda9cfcb11040798818838da3c59266108fa4906 t/v002_select.t
 SHA1 e4b1a0525a33bef8db1296731b5db40ab7f2ef2d t/v018.reqnon.pl
 SHA1 a2a52415d23efcfc14308d599356375571bfe087 t/v018.t
 SHA1 dd2ac97ae195c4c35ec25091eb7280b23db43d1a t/v019_validate_int.t
 SHA1 1d8c12da6eba26d1f052c7fbc845d3a75a38e54a t/v021_spaces.t
-SHA1 9d3057642721b52e9a5dbeb7f091e7316b649dbd t/validator.t
+SHA1 3224cecae424c45168ec0a27e30c73a5645f7952 t/validator.t
 SHA1 bac8790c450fe106fd41b93194d70d763f419757 t/validator_correct.t
-SHA1 511dc79cc097459780a8c615d9dfa5f1bd5ff1a2 t/value.t
+SHA1 43d0514ef251c5330b55a384be3395a9417ac426 t/value.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.2.4 (GNU/Linux)
 
-iD8DBQFG/GSzewjCT38k4dkRAhE5AJ4q40c4a9ZdZQWNEamxBLEnilfwNgCbB3ti
-d+2DBCOC0rAdGh9MbWoEEIw=
-=M4kI
+iD8DBQFHBK42ewjCT38k4dkRAqH6AJ9+jaaR63FPWz/l76+Wy1rnbTX94QCggwfN
+Ewj1eLKorekCxXkwNp28XzI=
+=RK+X
 -----END PGP SIGNATURE-----
