@@ -14,14 +14,14 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 b125f9da6045faa48be3bc3da5f4395fc8149e1a Changes
+SHA1 6c2878c98ba409f1043c8f21dc8b3e9ba4ce8aec Changes
 SHA1 3c0317a66e963adf359bb647e9aa861c5b2e7a99 MANIFEST
-SHA1 b6d271f236a60dc3f21a34e5e3d0467127b9b588 META.yml
+SHA1 0fc6283ef145a8481c9fda148ea7334d76349cb2 META.yml
 SHA1 9a7eccefbb441f7eb569bc15eeb05cd5409c11c2 Makefile.PL
 SHA1 e786b542b8e580dbd2c4f5cf10817b1119a5cd10 README
 SHA1 b7ff309a4eb7d58903ba886a0cce95a20cb3fb2d bin/tltail.pl
 SHA1 9ee9784b14e4913cf5fa0954d3e8616b4996e0c4 data/jpholiday.pl
-SHA1 db3d47690370d79241de1d4c5bf776a90dbdff21 doc/Makefile.PL
+SHA1 430e59dd4b7336acb11f977877047100cd55c192 doc/Makefile.PL
 SHA1 dba61659ba49beb753197c6da32ed4f9ae6ee468 doc/Tripletail.html
 SHA1 94ccfa7de528454ad574b9be05b530cdf96d77ba doc/Tripletail/CSV.html
 SHA1 6c0000ae07da9b7fe2df02f4c5841a813fb0ab2b doc/Tripletail/CharConv.html
@@ -83,8 +83,8 @@ SHA1 8a84e115a72a6176276a02cb153b69a1ab6d6346 ext/Makefile.PL
 SHA1 38f36aa2487a43980fc040864d3360599a461d62 ext/Tripletail-HtmlFilter/HtmlFilter.pm
 SHA1 85d8a83066ade21b2b856f0aad47e67fe2298826 ext/Tripletail-HtmlFilter/HtmlFilter.xs
 SHA1 f21aebc46af53621b9f798591429b36526048984 ext/Tripletail-HtmlFilter/Makefile.PL
-SHA1 4817b47c23e2b097480e7c08967a293f8a03f773 inc/ExtUtils/MY_Metafile.pm
-SHA1 5171aa1bf7cb8266f62114904151f0b333ab9140 lib/Tripletail.pm
+SHA1 03a676d0759900e2eec97a2bddee9789b613678b inc/ExtUtils/MY_Metafile.pm
+SHA1 42a3714e8e0bf36e6407376bd85038c6573df2c1 lib/Tripletail.pm
 SHA1 4779ff05bbb571837351d033b368e6f7a8a1d9b1 lib/Tripletail/CSV.pm
 SHA1 5ca1611b7af397aa70d0ad6a50588caf48f768e0 lib/Tripletail/CharConv.pm
 SHA1 0c4c4829d32dfcca2d30077e6c7f27a7b5955a14 lib/Tripletail/Cookie.pm
@@ -160,7 +160,7 @@ SHA1 47427db8c24f6ad4655e604f0d4981c0234efafd sample/session/login.ini
 SHA1 10166c7f932968cef28ba169f64a70733e6fe261 sample/session/logindouble.cgi
 SHA1 7bd2fe5e55a4305c29f9d75ae5097c1e75756fbb sample/session/logindouble.html
 SHA1 3e14ec46fe43c6e5a9aa50394f5dacb73a28a740 sample/session/logindouble.ini
-SHA1 6b8e00c9d745061bce5e5a040304e847e15a4f59 t/0.prereq.t
+SHA1 47ea308565f78623dc6e1e368ab375aaa3ec9152 t/0.prereq.t
 SHA1 2d628439096b3dfe96730a86dc40f84caeb2755f t/00.load.t
 SHA1 8010c13aa56097d46d8cfe7f105c489d0fc816e3 t/FaultHandler.pm
 SHA1 4f29d7d9b045541a13a95a12f260f08e72694277 t/charconv.t
@@ -210,7 +210,7 @@ SHA1 747a992d809ab0df73c31d6fa618fb7cc1f25b1f t/value.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.2.4 (GNU/Linux)
 
-iD8DBQFHRku4ewjCT38k4dkRAmtiAJ0TT8JG6YMvgP1Ka+cHBHBbo/NQNQCfZWkv
-OeZwRI5DyHgemHt1tq+qmg4=
-=thE/
+iD8DBQFHTkh0ewjCT38k4dkRApnlAJ48KIrt5A633ZC/Y62Ah7x3fcoHNQCgiBTl
+3qrYoBU9gJsSH+DPx/9aUO8=
+=wfOc
 -----END PGP SIGNATURE-----
