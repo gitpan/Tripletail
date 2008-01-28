@@ -14,9 +14,9 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 fed864784b9be5fd5151c7220c0f77da2ef17887 Changes
+SHA1 623820a566d6ef0fa4722ade071b43bf11e6bbb4 Changes
 SHA1 12a1162993490f45ed34f17765f03463b6722466 MANIFEST
-SHA1 0ff8c1a924d3be2304229a9c8d38199d5f9b0c46 META.yml
+SHA1 5c2e4d997d6100bc89e1188d02700aa711cbd261 META.yml
 SHA1 9a7eccefbb441f7eb569bc15eeb05cd5409c11c2 Makefile.PL
 SHA1 e786b542b8e580dbd2c4f5cf10817b1119a5cd10 README
 SHA1 b7ff309a4eb7d58903ba886a0cce95a20cb3fb2d bin/tltail.pl
@@ -82,9 +82,9 @@ SHA1 883b6bef1731c191aa2aad97b7a94a9878820125 doc/tips.pod
 SHA1 7510c96ce39ebb5e9d15ee4c81036f6fadec8db8 ext/Makefile.PL
 SHA1 38f36aa2487a43980fc040864d3360599a461d62 ext/Tripletail-HtmlFilter/HtmlFilter.pm
 SHA1 85d8a83066ade21b2b856f0aad47e67fe2298826 ext/Tripletail-HtmlFilter/HtmlFilter.xs
-SHA1 f21aebc46af53621b9f798591429b36526048984 ext/Tripletail-HtmlFilter/Makefile.PL
-SHA1 03a676d0759900e2eec97a2bddee9789b613678b inc/ExtUtils/MY_Metafile.pm
-SHA1 efec51798f47a25ac2487c16380bdc2c62ebc965 lib/Tripletail.pm
+SHA1 0ff18bf1f1717b4bca7052c8709d1552da2fbf75 ext/Tripletail-HtmlFilter/Makefile.PL
+SHA1 c4ba5db274179c152702ed371f2ebad94ba866b3 inc/ExtUtils/MY_Metafile.pm
+SHA1 2ed2cd3d40540772672baaa49ed0a8d1c97d5eb5 lib/Tripletail.pm
 SHA1 4779ff05bbb571837351d033b368e6f7a8a1d9b1 lib/Tripletail/CSV.pm
 SHA1 5ca1611b7af397aa70d0ad6a50588caf48f768e0 lib/Tripletail/CharConv.pm
 SHA1 0c4c4829d32dfcca2d30077e6c7f27a7b5955a14 lib/Tripletail/Cookie.pm
@@ -211,7 +211,7 @@ SHA1 747a992d809ab0df73c31d6fa618fb7cc1f25b1f t/value.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.2.4 (GNU/Linux)
 
-iD8DBQFHmUQsewjCT38k4dkRAtXNAJ9qiUnpBAfUrcGf2yTAHU3f2Eb30ACeMdnQ
-hao4VEg2HnVR9X4YgssiYTg=
-=iv6D
+iD8DBQFHnUwOewjCT38k4dkRAlfiAJ43O/rZHMUokJhb4jVQLvf+hU7JfwCfQvYH
+M/Vn02FJZFHpCnhe8R42PIc=
+=XczQ
 -----END PGP SIGNATURE-----
