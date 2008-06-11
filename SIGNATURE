@@ -14,9 +14,9 @@ not run its Makefile.PL or Build.PL.
 -----BEGIN PGP SIGNED MESSAGE-----
 Hash: SHA1
 
-SHA1 e1209db8107cc7b0fada1e8548bf3e597118ce97 Changes
-SHA1 dc26a1e6454c7d796c16170adbc52f831358f8ee MANIFEST
-SHA1 6baca1ca9de04aa72ac77e3e30cfd75c26945809 META.yml
+SHA1 e39d20ac8fabb91e1780253558ef63e21b898a4b Changes
+SHA1 1f2d3e8e6531f1b2df9518c56a8d82fce469067b MANIFEST
+SHA1 ad62bd0669382d238a0cb6b2e9355e010589d17b META.yml
 SHA1 9a7eccefbb441f7eb569bc15eeb05cd5409c11c2 Makefile.PL
 SHA1 e786b542b8e580dbd2c4f5cf10817b1119a5cd10 README
 SHA1 b7ff309a4eb7d58903ba886a0cce95a20cb3fb2d bin/tltail.pl
@@ -86,7 +86,7 @@ SHA1 38f36aa2487a43980fc040864d3360599a461d62 ext/Tripletail-HtmlFilter/HtmlFilt
 SHA1 85d8a83066ade21b2b856f0aad47e67fe2298826 ext/Tripletail-HtmlFilter/HtmlFilter.xs
 SHA1 0ff18bf1f1717b4bca7052c8709d1552da2fbf75 ext/Tripletail-HtmlFilter/Makefile.PL
 SHA1 c4ba5db274179c152702ed371f2ebad94ba866b3 inc/ExtUtils/MY_Metafile.pm
-SHA1 c45a53862f27cf8e6b4e956d05a3ae4731146164 lib/Tripletail.pm
+SHA1 4902ca5c318a21836214a4c4b19eb22a6a18cbdd lib/Tripletail.pm
 SHA1 4779ff05bbb571837351d033b368e6f7a8a1d9b1 lib/Tripletail/CSV.pm
 SHA1 5ca1611b7af397aa70d0ad6a50588caf48f768e0 lib/Tripletail/CharConv.pm
 SHA1 0c4c4829d32dfcca2d30077e6c7f27a7b5955a14 lib/Tripletail/Cookie.pm
@@ -182,7 +182,7 @@ SHA1 2e7c25245ec836d4fa41ca3fb02a2a643ad2933c t/form.t
 SHA1 6b5a9ee2567e39174c560948dfc5a4a0cd9138a4 t/htmlfilter.t
 SHA1 badaf1c17ac4339dadddf53b501505de677c12b9 t/ini.t
 SHA1 aca331135aa4cf14b62260c50346627f53d4d1f3 t/mail.t
-SHA1 754e8a5a3c12e85519254aa88734ad771a0398ad t/make_ini.pm
+SHA1 72c9957c20621f13a2e23ba8bbaf37452fbc3603 t/make_ini.pm
 SHA1 69b0ab408298f7cd1b5649721366e4e56e8030a3 t/memcache.t
 SHA1 9daf1567f422aff970a20b5f6982cb1b06a504aa t/pager.t
 SHA1 bb0a8f526f2dbb4b54d73d2d2708b498e9ecfef6 t/pod-coverage.t
@@ -198,7 +198,7 @@ SHA1 f70ec4c5c763934ea4629ad9a8598ea3d56b16ee t/server_session_sqlite.t
 SHA1 1385440b939457412afd5468bf57d06ea663ff7d t/tagcheck.t
 SHA1 6598cd76f250e47c1758d68d70b67cb4cdfe5215 t/template.t
 SHA1 71c522ec6ec5e1b96c71497e6ed0f29197d5bbea t/test_server.pm
-SHA1 31bc5cb16a8c35aa84d9ef1151777b79fc372c2c t/tl-faulthandler.t
+SHA1 ea46846094177b990fd726c254fc5d81496e2e2d t/tl-faulthandler.t
 SHA1 a29ced2867d2800c467f2b087fb19fbe679df333 t/tl.t
 SHA1 eda9cfcb11040798818838da3c59266108fa4906 t/v002_select.t
 SHA1 e4b1a0525a33bef8db1296731b5db40ab7f2ef2d t/v018.reqnon.pl
@@ -208,13 +208,14 @@ SHA1 1d8c12da6eba26d1f052c7fbc845d3a75a38e54a t/v021_spaces.t
 SHA1 9f0d4de4ff7ffdc721fc5c3183c11240b5142810 t/v038_tainted_template.t
 SHA1 df0a5b3c68b49c958ce1561f87888ac2f9ca35a8 t/v040_mutable_cgi_input.t
 SHA1 f3beefa17ac14a16112db2177d7c4b0770c5a122 t/v042_debug_buffering.t
+SHA1 f015cda44e6e1df99000a7ea8c79be6fc73797fb t/v043_buffed_clen.t
 SHA1 3224cecae424c45168ec0a27e30c73a5645f7952 t/validator.t
 SHA1 bac8790c450fe106fd41b93194d70d763f419757 t/validator_correct.t
 SHA1 747a992d809ab0df73c31d6fa618fb7cc1f25b1f t/value.t
 -----BEGIN PGP SIGNATURE-----
 Version: GnuPG v1.2.4 (GNU/Linux)
 
-iD8DBQFIR1f9hkQ+SqeCFQ8RAiryAJ9oMAllesSMUfN2G4j1XFK62UxlcwCgppuF
-gt7/mhwL3U7sbMwf0ot7bGA=
-=jrl8
+iD8DBQFIT3fvewjCT38k4dkRAvv9AJ94ut/pkODqkRw63QF9mIIfVhFMXQCfSoUO
+5i0yo6qJwygqgf+/cwGesNw=
+=1XXK
 -----END PGP SIGNATURE-----
