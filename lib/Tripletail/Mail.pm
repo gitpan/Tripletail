@@ -200,12 +200,18 @@ sub setHeader {
 		die __PACKAGE__."#setHeader: arg[1] is an unacceptable reference. [$ref] (第1引数が不正なリファレンスです)\n";
 	}
 
-	while(my ($key, $value) = each(%$hash)) {
-		$key =~ s/^-//;
-		$this->{entity}->head->replace(
-			$key => $this->_encodeHeader($value, length($key))
-		);
-	}
+    while(my ($key, $value) = each(%$hash)) {
+
+        $key =~ s/^-//;
+
+        if ($value =~ m/[\x00-\x1F]/) {
+            die __PACKAGE__."#setHeader: suspicious control codes in header [$key]: [$value]";
+        }
+
+        $this->{entity}->head->replace(
+            $key => $this->_encodeHeader($value, length($key))
+        );
+    }
 
 	$this;
 }
@@ -272,6 +278,14 @@ sub getBody {
 		$io->close;
 		$str;
 	}
+}
+
+sub getFilename {
+	my $this = shift;
+
+	my $filename = $this->{entity}->head->recommended_filename;
+	
+	$filename;
 }
 
 sub attach {
@@ -897,6 +911,12 @@ set メソッドの逆の操作。
   $text = $mail->getBody
 
 メール本文を取得する。UTF-8で返される。
+
+=item getFilename
+
+  $filename = $mail->getFilename
+
+メールが添付ファイル等で、ファイル名がある場合に、そのファイル名を取得する。
 
 =item attach
 

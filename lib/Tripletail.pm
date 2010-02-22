@@ -14,7 +14,7 @@ use Data::Dumper;
 use POSIX qw(:errno_h);
 use Cwd ();
 
-our $VERSION = '0.48';
+our $VERSION = '0.49';
 our $XS_VERSION = $VERSION;
 $VERSION = eval $VERSION;
 
@@ -1274,21 +1274,31 @@ sub getInputFilter {
 }
 
 sub _sendErrorIfNeeded {
-	my $this = shift;
-	my $err = shift;
-	
-	isa($err, 'Tripletail::Error') or
-	  $err = $TL->newError('error' => $err);
+    my $this = shift;
+    my $err = shift;
+    
+    isa($err, 'Tripletail::Error') or
+      $err = $TL->newError('error' => $err);
 
-	my $emtype = $this->INI->get(TL => 'errormailtype', 'error memory-leak');
-	my $types = {map { $_ => 1 } split /\s+/, $emtype};
+    my $emtype = $this->INI->get(TL => 'errormailtype', 'error memory-leak');
+    my $types = {map { $_ => 1 } split /\s+/, $emtype};
 
-	if ($types->{$err->type}) {
-		$this->sendError(
-			title => 'Tripletail: ' . $err->title,
-			error => ($err->type eq 'error' ? "$err" : $err->message),
-		   );
-	}
+    if ($types->{$err->type}) {
+        my $title  = 'Tripletail: ' . $err->title;
+        my $maxlen = $this->INI->get(TL => errormail_subject_len => 100);
+
+        $title =~ s/\r|\n/ /g;
+        $title =~ s/[\x00-\x1F]//g;
+
+        if (length($title) > $maxlen) {
+            $title = substr($title, 0, $maxlen) . '...';
+        }
+
+        $this->sendError(
+            title => $title,
+            error => ($err->type eq 'error' ? "$err" : $err->message),
+           );
+    }
 }
 
 sub _hostname
@@ -3596,6 +3606,13 @@ inigroup が省略されると C<'Sendmail'> が使われる。
 どのような事象が発生した時に errormail で指定された先にメールを送るか。
 以下の項目をスペース区切りで任意の数だけ指定する。
 デフォルトは 'error memory-leak' である。
+
+=item C<errormail_subject_len>
+
+  errormail_subject_len = 80
+
+エラー発生時に送られるメールの表題の最大長。長過ぎるとメール送信に失敗
+する場合がある。デフォルトは 80 バイト。
 
 =over 4
 

@@ -1,4 +1,4 @@
-use Test::More tests => 54;
+use Test::More tests => 57;
 use Test::Exception;
 use strict;
 use warnings;
@@ -205,4 +205,45 @@ dies_ok {$m->deletePart(-1)} 'deletePart die';
 dies_ok {$m->deletePart(500000)} 'deletePart die';
 
 is($m->countParts, 0, 'countParts (after delete)');
+
+my $filename_mail_str = q{Subject: This is a test mail...
+To: null@example.org
+From: null@example.org
+Content-Type: multipart/alternative; boundary="----------=_1256691457-15882-0"
+Date: Wed, 28 Oct 2009 09:57:37 +0900
+Message-Id: <0.1256691457.15882.tmmlib7@rd8>
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+This is a multi-part message in MIME format...
+
+------------=_1256691457-15882-0
+Content-Type: text/html;
+ charset="ISO-2022-JP"
+Content-Disposition:
+ inline
+Content-Transfer-Encoding: 7bit
+
+1234567890
+------------=_1256691457-15882-0
+Content-Type: application/octet-stream;
+ name="test.dat"
+Content-Disposition: inline;
+ filename="test.dat"
+Content-Transfer-Encoding: base64
+
+AAECAwQFBgcICQo=
+
+------------=_1256691457-15882-0--
+
+};
+$filename_mail_str =~ s/\n/\r\n/g;
+
+my $filename_mail = $TL->newMail->parse($filename_mail_str);
+ok($filename_mail->countParts == 2, 'getFilename (1)');
+ok(!defined($filename_mail->getPart(0)->getFilename), 'getFilename (1)');
+ok($filename_mail->getPart(1)->getFilename eq 'test.dat', 'getFilename (2)');
+
+
+
 

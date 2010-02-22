@@ -10,6 +10,7 @@ our @ISA = qw(Tripletail::Filter);
 
 # オプション一覧:
 # * contenttype => デフォルト: application/octet-stream
+# * filename    => 指定されると、そのファイル名で Content-Disposition を出力する。
 
 1;
 
@@ -26,11 +27,18 @@ sub _new {
 	# オプションのチェック
 	my $check = {
 		contenttype => [qw(defined no_empty scalar)],
+		filename    => [qw(no_empty scalar)],
 	};
 	$this->_check_options($check);
 
 	$this->setHeader('Content-Type' => $this->{option}{contenttype});
-
+	
+	if(defined($this->{option}{filename})) {
+		my $filename = $this->{option}{filename};
+		$filename = $TL->charconv($filename, 'UTF-8' => 'Shift_JIS');
+		$this->setHeader('Content-Disposition' => qq{attachment; filename="$filename"});
+	}
+	
 	$this;
 }
 
@@ -39,7 +47,13 @@ sub reset {
 	$this->SUPER::reset;
 
 	$this->setHeader('Content-Type' => $this->{option}{contenttype});
-
+	
+	if(defined($this->{option}{filename})) {
+		my $filename = $this->{option}{filename};
+		$filename = $TL->charconv($filename, 'UTF-8' => 'Shift_JIS');
+		$this->setHeader('Content-Disposition' => qq{attachment; filename="$filename"});
+	}
+	
 	$this;
 }
 
@@ -61,8 +75,14 @@ Tripletail::Filter::Binary - 内容に変更を加えない出力フィルタ
 =head1 SYNOPSIS
 
   $TL->setContentFilter('Tripletail::Filter::Binary', contenttype => 'image/png');
-  
   $TL->print($TL->readFile('foo.png'));
+  
+  $TL->setContentFilter(
+      'Tripletail::Filter::Binary',
+      contenttype => 'application/vnd.ms-excel',
+      filename => 'abc.xls',
+  );
+  $TL->print($TL->readFile('abc.xls'));
 
 =head1 DESCRIPTION
 
@@ -75,6 +95,13 @@ Tripletail::Filter::Binary - 内容に変更を加えない出力フィルタ
 =item contenttype
 
 C<Content-Type> を指定する。省略可能。
+
+=item filename
+
+ヘッダで出力するファイル名を指定する。省略可能。
+指定した場合、次のようなヘッダが出力される。
+
+  Content-Disposition: attachment; filename="foo.csv"
 
 =back
 
@@ -116,7 +143,7 @@ L<Tripletail::Filter>参照
 
 =over 4
 
-Copyright 2006 YMIRLINK Inc.
+Copyright 2006-2010 YMIRLINK Inc.
 
 This framework is free software; you can redistribute it and/or modify it under the same terms as Perl itself
 
