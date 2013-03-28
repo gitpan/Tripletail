@@ -43,6 +43,11 @@ Tripletail::Ini - 設定ファイルを読み書きする
 
 </span></a>
 </li>
+<li><a href="#Ini_Xe3X83X91Xe3X83Xa9Xe3X83Xa1Xe3X83XbcXe3X82Xbf">
+<span class="pod_lang">Ini パラメータ
+
+</span></a>
+</li>
 </ul>
 </li>
 <li><a href="#SEE_ALSO">
@@ -82,9 +87,9 @@ Tripletail::Ini - 設定ファイルを読み書きする
 </span></a></h1>
 
 <pre class="pod_verbatim"><code>  my $ini = $TL-&gt;newIni('foo.ini');
-  
+
   print $ini-&gt;get(Group1 =&gt; 'Key1');
-  
+
   $ini-&gt;set(Group2 =&gt; 'Key1' =&gt; 'value');
   $ini-&gt;write('bar.ini');</code></pre>
 
@@ -268,7 +273,7 @@ $rawに1を指定した場合、特化指定を含んだグループ文字列で
 
 </dd>
 <dt><a id="getGroups"><span class="pod_lang"><code class="pod_iseq_C">getGroups</code>
-  
+
 </span></a></dt>
 <dd>
 <pre class="pod_verbatim"><code>  @groups = $ini-&gt;getGroups($raw)</code></pre>
@@ -303,8 +308,22 @@ $rawに1を指定した場合、特化指定を含んだグループ文字列で
 
 <p>
 <span class="pod_lang">指定されたグループ・キーの値を返す。グループorキーがなければ$defaultで指定された値を返す。
-$defaultが指定されなかった場合は、undefを返す。
+$defaultが指定されなかった場合は die で例外を送出する。
 $rawに1を指定した場合、特化指定を含んだグループ文字列で確認し値を返す。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">$default は undef であっても構わない。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">このメソッドはかつて $default が無く且つ値も存在しなければ undef を返していた。
+その時の動作に基いて書かれた既存のコードとの互換性を得るためのオプションが存在する。
+詳しくは <a href="#Ini_Xe3X83X91Xe3X83Xa9Xe3X83Xa1Xe3X83XbcXe3X82Xbf">&quot;Ini パラメータ&quot;</a> を参照。
 
 </span>
 </p>
@@ -389,6 +408,51 @@ $rawに1を指定した場合、特化指定を含んだグループ文字列で
 </dd>
 </dl>
 
+<h2><a id="Ini_Xe3X83X91Xe3X83Xa9Xe3X83Xa1Xe3X83XbcXe3X82Xbf">
+<span class="pod_lang">Ini パラメータ
+
+</span></a></h2>
+
+<p>
+<span class="pod_lang">Tripletail::Ini クラス自体の動作を設定するためのパラメータ。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang"><code class="pod_iseq_C">use Tripletail qw(foo.ini);</code> に与えられたシステム設定用 ini
+ファイルに書かれたものが参照される。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">グループ名は &quot;Ini&quot; とする。例:
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code>  [Ini]
+  treat_absent_values_as_undef = true</code></pre>
+
+<dl>
+<dt><a id="treat_absent_values_as_undef"><span class="pod_lang"><code class="pod_iseq_C">treat_absent_values_as_undef</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  tread_absent_values_as_undef = true</code></pre>
+
+<p>
+<span class="pod_lang">非推奨オプション。true を指定した場合、
+<a href="http://search.cpan.org/perldoc/get">get</a> メソッドにデフォルト値が与えられていないのに要求したキーに対する値が存在した場合に
+die することなく undef を返す。
+
+</span>
+</p>
+
+</dd>
+</dl>
+
 
 <hr />
 <h1><a id="SEE_ALSO">
@@ -460,6 +524,7 @@ Tripletail::Ini - 設定ファイルを読み書きする
 <li><a href="#AUTHOR_INFORMATION">AUTHOR INFORMATION</a></li>
 <li><a href="#DESCRIPTION">DESCRIPTION</a></li>
 <li><a href="#HOSTXe3X82Xb0Xe3X83XabXe3X83XbcXe3X83X97Xe3X81XabXe3X81XafXe3X80X81Xe7X89Xb9Xe5X8cX96Xe6X8cX87Xe5XaeX9aXe3X81XafXe4XbdXbfXe7X94Xa8Xe3X81Xa7Xe3X81X8dXe3X81XaaXe3X81X84">HOSTグループには、特化指定は使用できない</a></li>
+<li><a href="#Ini_Xe3X83X91Xe3X83Xa9Xe3X83Xa1Xe3X83XbcXe3X82Xbf">Ini パラメータ</a></li>
 <li><a href="#METHODS">METHODS</a></li>
 <li><a href="#NAME">NAME</a></li>
 <li><a href="#SEE_ALSO">SEE ALSO</a></li>
@@ -476,6 +541,7 @@ Tripletail::Ini - 設定ファイルを読み書きする
 <li><a href="#get_reloc">get_reloc</a></li>
 <li><a href="#read">read</a></li>
 <li><a href="#set">set</a></li>
+<li><a href="#treat_absent_values_as_undef">treat_absent_values_as_undef</a></li>
 <li><a href="#write">write</a></li>
 <li><a href="#Xe3X82Xb0Xe3X83XabXe3X83XbcXe3X83X97Xe5X90X8dXe3X81XabXe3X81Xaf_"["_"]"_Xe5X88Xb6Xe5XbeXa1Xe6X96X87Xe5XadX97(0x00-0x20,0x7f,0x80-0x9f,0xff)_Xe4XbbXa5Xe5Xa4X96Xe3X81XaeXe5X8dX8aXe8Xa7X92Xe8X8bXb1Xe6X95Xb0Xe5XadX97Xe3X81X8cXe4XbdXbfXe7X94Xa8Xe5X8fXafXe8X83XbdXe3X80X82">グループ名には &quot;[&quot; &quot;]&quot; 制御文字(0x00-0x20,0x7f,0x80-0x9f,0xff) 以外の半角英数字が使用可能。</a></li>
 <li><a href="#Xe3X82Xb0Xe3X83XabXe3X83XbcXe3X83X97Xe5X90X8dXe3X81Xae"@"_":"Xe3X81XafXe7X89Xb9Xe5X8cX96Xe6X8cX87Xe5XaeX9aXe7X94Xa8Xe3X81XaeXe6X96X87Xe5XadX97Xe3X81Xa8Xe3X81XaaXe3X82X8bXe7X82XbaXe3X80X81Xe4XbbXbbXe6X84X8fXe3X81XaeXe3X82Xb0Xe3X83XabXe3X83XbcXe3X83X97Xe5X90X8dXe3X81XabXe3X81XafXe4XbdXbfXe7X94Xa8Xe3X81XafXe5X87XbaXe6X9dXa5Xe3X81XaaXe3X81X84Xe3X80X82">グループ名の&quot;@&quot; &quot;:&quot;は特化指定用の文字となる為、任意のグループ名には使用は出来ない。</a></li>

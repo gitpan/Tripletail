@@ -55,7 +55,7 @@ sub _new {
 	$this->_reset;
 
 	$this->{parent} = $parent;
-	$this->{name} = lc $name;
+	$this->{name} = defined($name) ? lc $name : undef; # rootの場合は使われることはない.
 	$this->{allow_unexpanded_tags} = $allow_unexpanded_tags || 'false';
 
 	if(defined $html) {
@@ -111,6 +111,11 @@ sub _setTemplate {
 	my $str = shift;
 
 	$this->_reset;
+
+	if( utf8::is_utf8($str) )
+	{
+		utf8::encode($str);
+	}
 
 	if($str =~ m/^\s*<\?xml/) {
 		$this->{is_xhtml} = 1;
@@ -648,9 +653,9 @@ sub getForm {
 					defined $str ? $str : '';
 				};
 				my $checked = do {
-					my $str = lc($elem->attr('checked'));
-					if($str && $str eq 'checked') {
-						$str;
+					my $str = $elem->attr('checked');
+					if($str && lc($str) eq 'checked') {
+						'checked';
 					} elsif($elem->end && $elem->end eq 'checked') {
 						$elem->end;
 					} else {
@@ -706,9 +711,9 @@ sub getForm {
 						}
 					};
 					my $selected = do {
-						my $str = lc $option->attr('selected');
-						if($str && $str eq 'selected') {
-							$str;
+						my $str = $option->attr('selected');
+						if($str && lc($str) eq 'selected') {
+							'selected';
 						} elsif($option->end && $option->end eq 'selected') {
 							$option->end;
 						}
@@ -1130,7 +1135,7 @@ sub addSessionCheck {
 	my $name = shift;
 	my $issecure = shift;
 
-	if( ref($sessiongroup) && UNIVERSAL::isa($sessiongroup, 'Tripletail::Session') )
+	if( ref($sessiongroup) && Tripletail::_isa($sessiongroup, 'Tripletail::Session') )
 	{
 		$sessiongroup = $sessiongroup->{group};
 	}
@@ -1562,6 +1567,10 @@ sub _compose {
 				my $val = $this->{valmap}{${$seg->[2]}};
 				
 				if(defined $val) {
+					if( utf8::is_utf8($val) )
+					{
+						utf8::encode($val);
+					}
 					$ret .= $val;
 				}
 				
@@ -1578,6 +1587,10 @@ sub _compose {
 				my $val = $this->{valmap}{${$seg->[2]}};
                 
 				if (defined $val) {
+					if( utf8::is_utf8($val) )
+					{
+						utf8::encode($val);
+					}
                     $ret .= $val;
                 }
 	

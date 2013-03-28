@@ -151,8 +151,68 @@ use base qw{Tripletail::Validator::Filter};
 sub doFilter {
 	my $this   = shift;
 	my $values = shift;
+	my $args   = shift;
 
-	return grep { !$TL->newValue($_)->isExistentDay() } @$values;
+	my %option;
+	if(defined $args) {
+		for my $param (split(/\s*,\s*/,$args)) {
+			$param =~ s/"|'//g;
+			my ($key,$value) = split(/\s*=>\s*/,$param);
+			$option{$key} = $value;
+		}
+	}
+
+	return grep { !$TL->newValue($_)->isExistentDay(%option) } @$values;
+}
+
+# -----------------------------------------------------------------------------
+# Tripletail::Validator::Filter::ExistentTime - ExistentTimeフィルタ
+# -----------------------------------------------------------------------------
+package Tripletail::Validator::Filter::ExistentTime;
+use Tripletail;
+
+use base qw{Tripletail::Validator::Filter};
+
+sub doFilter {
+	my $this   = shift;
+	my $values = shift;
+	my $args   = shift;
+
+	my %option;
+	if(defined $args) {
+		for my $param (split(/\s*,\s*/,$args)) {
+			$param =~ s/"|'//g;
+			my ($key,$value) = split(/\s*=>\s*/,$param);
+			$option{$key} = $value;
+		}
+	}
+
+	return grep { !$TL->newValue($_)->isExistentTime(%option) } @$values;
+}
+
+# -----------------------------------------------------------------------------
+# Tripletail::Validator::Filter::ExistentDateTime - ExistentDateTimeフィルタ
+# -----------------------------------------------------------------------------
+package Tripletail::Validator::Filter::ExistentDateTime;
+use Tripletail;
+
+use base qw{Tripletail::Validator::Filter};
+
+sub doFilter {
+	my $this   = shift;
+	my $values = shift;
+	my $args   = shift;
+
+	my %option;
+	if(defined $args) {
+		for my $param (split(/\s*,\s*/,$args)) {
+			$param =~ s/"|'//g;
+			my ($key,$value) = split(/\s*=>\s*/,$param);
+			$option{$key} = $value;
+		}
+	}
+
+	return grep { !$TL->newValue($_)->isExistentDateTime(%option) } @$values;
 }
 
 # -----------------------------------------------------------------------------

@@ -4,6 +4,9 @@
 package Tripletail::CharConv;
 use strict;
 use warnings;
+use Encode;
+use Encode::Alias;
+use Unicode::Japanese ();
 
 # $TL->charconv('文字列', 'utf8', 'sjis');
 
@@ -60,79 +63,61 @@ sub _getInstance {
 }
 
 sub _charconv {
-	my $this = shift;
-	my $str = shift;
-	my $from = shift;
-	my $to = shift;
+    my $this = shift;
+    my $str  = shift;
+    my $from = shift;
+    my $to   = shift;
 
-	local($_);
+    if (!defined $str) {
+        die "TL#charconv: arg[1] is not defined. (第1引数が指定されていません)\n";
+    }
+    elsif (ref $str) {
+        die "TL#charconv: arg[1] is a reference. [$str] (第1引数がリファレンスです)\n";
+    }
 
-	if(!defined($str)) {
-		die "TL#charconv: arg[1] is not defined. (第1引数が指定されていません)\n";
-	} elsif(ref($str)) {
-		die "TL#charconv: arg[1] is a reference. [$str] (第1引数がリファレンスです)\n";
-	}
+    if (!defined $from) {
+        $from = 'auto';
+    }
+    elsif (ref $from) {
+        die "TL#charconv: arg[2] is a reference. [$from] (第2引数がリファレンスです)\n";
+    }
 
-	if(!defined($from)) {
-		$from = 'auto';
-	} elsif(ref($from)) {
-		die "TL#charconv: arg[2] is a reference. [$from] (第2引数がリファレンスです)\n";
-	}
+    if (!defined $to) {
+        $to = 'UTF-8';
+    }
+    elsif (ref $to) {
+        die "TL#charconv: arg[3] is a reference. [$to] (第3引数がリファレンスです)\n";
+    }
 
-	if(!defined($to)) {
-		$to = 'UTF-8';
-	} elsif(ref($to)) {
-		die "TL#charconv: arg[3] is a reference. [$to] (第3引数がリファレンスです)\n";
-	}
+    my $fromuj = $MAP_ENCODE_TO_UNIJP{$from} ? $MAP_ENCODE_TO_UNIJP{$from} : $from;
+    my $touj   = $MAP_ENCODE_TO_UNIJP{$to  } ? $MAP_ENCODE_TO_UNIJP{$to  } : $to;
 
-	my $fromuj = $MAP_ENCODE_TO_UNIJP{$from} ? $MAP_ENCODE_TO_UNIJP{$from} : $from;
-	my $touj = $MAP_ENCODE_TO_UNIJP{$to} ? $MAP_ENCODE_TO_UNIJP{$to} : $to;
-	
-	if($UNICODE_JAPANESE_CODE{$fromuj} and $UNICODE_JAPANESE_CODE{$touj}) {
-		# 両方ともUniJPのサポート内ならUniJPで変換
-		Unicode::Japanese->new($str, $fromuj)->conv($touj);
-	} elsif($UNICODE_JAPANESE_CODE{$fromuj}) {
-		# 片方サポートなのでutf8経由で変換
-		$this->_encodeAvailable or die "TL#charconv: the Encode module is unavailable. (Encodeモジュールが使用できません)\n";
-		my $utf8 = Unicode::Japanese->new($str, $fromuj)->utf8;
-		Encode::find_encoding($to)->encode($utf8);
-	} elsif($UNICODE_JAPANESE_CODE{$touj}) {
-		# 片方サポートなのでutf8経由で変換
-		$this->_encodeAvailable or die "TL#charconv: the Encode module is unavailable. (Encodeモジュールが使用できません)\n";
-		my $utf8 = Encode::find_encoding($from)->decode($str);
-		Unicode::Japanese->new($str, 'utf8')->conv($touj);
-	} else {
-		# 両方ともサポート外
-		$this->_encodeAvailable or die "TL#charconv: the Encode module is unavailable. (Encodeモジュールが使用できません)\n";
-		my $utf8 = Encode::find_encoding($from)->decode($str);
-		Encode::find_encoding($to)->encode($utf8);
-	}
-}
-
-sub _encodeAvailable {
-	my $this = shift;
-
-	local($_);
-
-	if(defined($_ = $this->{encode_is_available})) {
-		$_;
-	} else {
-		eval {
-			require Encode;
-			require Encode::Alias;
-			require Encode::Guess;
-		};
-		$this->{encode_is_available} = $@ ? 0 : 1;
-	}
+    if ($UNICODE_JAPANESE_CODE{$fromuj} and $UNICODE_JAPANESE_CODE{$touj}) {
+        # 両方ともUniJPのサポート内ならUniJPで変換
+        return Unicode::Japanese->new($str, $fromuj)->conv($touj);
+    }
+    elsif ($UNICODE_JAPANESE_CODE{$fromuj}) {
+        # 片方サポートなのでutf8経由で変換
+        my $utf8 = Unicode::Japanese->new($str, $fromuj)->utf8;
+        return Encode::find_encoding($to)->encode($utf8);
+    }
+    elsif ($UNICODE_JAPANESE_CODE{$touj}) {
+        # 片方サポートなのでutf8経由で変換
+        my $utf8 = Encode::find_encoding($from)->decode($str);
+        return Unicode::Japanese->new($str, 'utf8')->conv($touj);
+    }
+    else {
+        # 両方ともサポート外
+        my $utf8 = Encode::find_encoding($from)->decode($str);
+        return Encode::find_encoding($to)->encode($utf8);
+    }
 }
 
 sub __new {
-	my $class = shift;
+    my $class = shift;
+    my $this  = bless {} => $class;
 
-	my $this = bless {} => $class;
-	$this->{encode_is_available} = undef;
-
-	$this;
+    return $this;
 }
 
 

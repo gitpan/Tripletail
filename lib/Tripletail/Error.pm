@@ -21,6 +21,9 @@ my $DEFAULT_ERROR_TEMPLATE = &__load_default_error_template();
 
 my $TRACE_ALLOWANCE_OF_CURRENT_REQUEST;
 
+# 最後に発生した DB のエラー。内容は任意のハッシュ。
+our $LAST_DB_ERROR;
+
 1;
 
 # -----------------------------------------------------------------------------
@@ -94,30 +97,8 @@ sub _new {
 		}
 	}
 
-    if( our $LAST_DBH )
-    {
-      for( my $i=0; my @c=caller($i); ++$i )
-      {
-        my $sub = $c[3];
-        $sub =~ /^DB[ID]::|^Tripletail::DB::/ or next;
-        my ($type, $dbh);
-        if( UNIVERSAL::isa($LAST_DBH, 'ARRAY') )
-        {
-          ($type, $dbh) = @$LAST_DBH;
-        }else
-        {
-          $type = $LAST_DBH->getType();
-          $dbh  = $LAST_DBH->getDbh();
-        }
-        if( $type eq 'error' )
-        {
-          $this->{db_error} = $dbh;
-        }else
-        {
-          $this->{db_error} = Tripletail::DB->_errinfo($dbh, $type);
-        }
-        last;
-      }
+    if (our $LAST_DB_ERROR) {
+        $this->{db_error} = $LAST_DB_ERROR->force;
     }
 
     $TL->setHook(
@@ -260,10 +241,8 @@ sub is_trace_allowed {
     else {
         my $ret;
 
-        my $masks = $TL->INI->get(
-            TL => 'stackallow',
-            '');
-	
+        my $masks = $TL->INI->get(TL => stackallow => '');
+
         if (my $remote = $ENV{REMOTE_ADDR}) {
             if($TL->newValue->set($remote)->isIpAddress($masks)) {
                 # マッチした

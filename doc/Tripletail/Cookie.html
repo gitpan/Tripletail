@@ -197,6 +197,48 @@ Tripletail::Cookie - 独自のクッキー管理を行う
 </span></a></h2>
 
 <dl>
+<dt><a id="format"><span class="pod_lang">format
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  format = modern</code></pre>
+
+<p>
+<span class="pod_lang">生成されるクッキーの形式を指定する。<code class="pod_iseq_C">legacy</code> と <code class="pod_iseq_C">modern</code> から選択可能であり、後述の
+<code class="pod_iseq_C">cryptokey</code> が存在すればデフォルトが <code class="pod_iseq_C">modern</code> に、存在すれば <code class="pod_iseq_C">legacy</code> になる。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang"><code class="pod_iseq_C">modern</code> は AES によるクッキーの暗号化や ZLIB
+による圧縮、Adler-32 チェックサムによる誤り検出にも対応した非常にコンパクトな形式であるが、この形式で生成されたクッキーは
+<a href=".././Tripletail.html">Tripletail</a> のバージョン 0.50 以降でなければ読み取る事ができない。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">なお <code class="pod_iseq_C">modern</code> に設定されている場合であっても、<code class="pod_iseq_C">legacy</code> 形式（すなわちバージョン 0.49 以前の形式）のクッキーは読み取り可能である。
+
+</span>
+</p>
+
+</dd>
+<dt><a id="cryptokey"><span class="pod_lang">cryptokey
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  cryptokey = Lorem ipsum dolor sit amet, consectetur adipisicing elit</code></pre>
+
+<p>
+<span class="pod_lang">クッキーの暗号化に使用する鍵であり、省略可能。これを指定した場合には
+<a href="#format">&quot;format&quot;</a> を <code class="pod_iseq_C">modern</code> とするか、もしくは省略しなければならない。
+
+</span>
+</p>
+
+</dd>
 <dt><a id="path"><span class="pod_lang">path
 
 </span></a></dt>
@@ -285,7 +327,7 @@ Tripletail::Cookie - 独自のクッキー管理を行う
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__00"><span class="pod_lang"><a href=".././Tripletail/RawCookie.html">Tripletail::RawCookie</a>
+<dt><a id="X__00"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::RawCookie">Tripletail::RawCookie</a>
 
 </span></a></dt>
 <dd>
@@ -368,9 +410,11 @@ Tripletail::Cookie - 独自のクッキー管理を行う
 <li><a href="#X__01">Tripletail::Form</a></li>
 <li><a href="#X__00">Tripletail::RawCookie</a></li>
 <li><a href="#clear">clear</a></li>
+<li><a href="#cryptokey">cryptokey</a></li>
 <li><a href="#delete">delete</a></li>
 <li><a href="#domain">domain</a></li>
 <li><a href="#expires">expires</a></li>
+<li><a href="#format">format</a></li>
 <li><a href="#get">get</a></li>
 <li><a href="#httponly">httponly</a></li>
 <li><a href="#path">path</a></li>

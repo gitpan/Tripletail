@@ -1,8 +1,54 @@
+# -*- org -*-
+#+STARTUP: indent
+#+STARTUP: fnprompt
+#+STARTUP: logdone
+#+OPTIONS: ^:nil
+#+TODO: UNRELEASED(u) | RELEASED(r)
+
 Revision history for Tripletail
 
-0.49 Mon Feb 22 14:06:38 JST 2010
-	- Mail#getFilename メソッドを追加．
-	- Filter::Binary モジュールで、ファイル名を指定できるように拡張しました。
+* RELEASED 0.50
+CLOSED: [2013-03-26 Tue 16:19]
+- [[重要な更新]]
+  - MobileHTML フィルタでのセッション不具合の修正
+  - TL::Ini, デフォルト値もini内定義値もなかった場合は例外を発生させるように変更(互換用パラメータ [Ini]treat_absent_values_as_undef)
+- TL
+  - perl-5.10.1 以降でのコンパイルエラー時内部エラー対策.
+  - TL#logにflagged文字列を渡すと警告が発生していたのを抑制.
+- TL::Cookie
+  - delete 後に get した際、必ずしも結果が undef にならなかった不具合を修正しました。
+  - 生成するクッキーに対して圧縮や暗号化を行う機能を追加しました。
+- TL::DB
+  - DB モジュールに ini パラメータ "autoretry" を追加しました。
+  - 内部コードの大幅な整頓
+  - TL::DB#upsert 関数の追加 (pgsqlのみ)
+  - TL::DB#findTables 関数の追加
+  - TL::DB#escapeLike 関数の追加
+  - TL::DB#getTableColumns 関数の追加
+- TL::Filter
+  - Binary, CSV, HeaderOnly, TEXT も同様に設定されたクッキー（セッションキーも含む）を出力するようになりました。
+- TL::Serializer
+  -  新規追加しました。
+- TL::Session
+  - 内部コードの大幅な整頓
+  - pgsql時のセッションテーブルの自動生成を解除
+- TL::Value
+  - Value#isExistentDay 引数に%optionを指定できるように修正しました。
+  - Value#isExistentTime メソッドを追加しました。
+  - Value#isExistentDateTime メソッドを追加しました。
+  - Value#isExistentDayが正常に動作していなかった不具合(0日を正常扱い,undef以外を偽値として返すことがある)を修正しました。
+  - TL::Value#isMobileEmail, dot始まり/終端のアドレスを許容するように変更
+- TL::Validator
+  - Validator の組み込みcheckフィルタ ExistentDay に引数%optionを指定できるようになりました。
+  - Validator の組み込みcheckフィルタ ExistentTime 及び ExistentDateTime が追加されました。
+
+* RELEASED 0.49
+CLOSED: [2010-02-22 Mon 14:06]
+- Mail#getFilename メソッドを追加．
+- Filter::Binary モジュールで、ファイル名を指定できるように拡張しました。
+
+
+* old logs
 
 0.48 Mon Oct 19 10:35:26 JST 2009
 	- FileSentinel に依存モジュールの watch を自動で行う機能を追加しました。

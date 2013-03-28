@@ -1,3 +1,4 @@
+# -*- perl -*-
 use Test::More;
 use Test::Exception;
 use strict;
@@ -36,9 +37,9 @@ if ($@) {
 	plan skip_all => "Failed to connect to local MySQL: $@";
 }
 
-plan tests => 67+24+15;
+plan tests => 66+24+15;
 
-&test_mysql; #67.
+&test_mysql; #66.
 &test_tx_transaction; #24.
 &test_old_transaction;  #15.
 
@@ -78,7 +79,6 @@ sub main {
     dies_ok {$DB->setBufferSize(\123)} 'setBufferSize die';
     dies_ok {$DB->symquote} 'symquote die';
     dies_ok {$DB->symquote(\123)} 'symquote die';
-    dies_ok {$DB->symquote('"')} 'symquote die';
 	is($DB->symquote('a b c'), '`a b c`', 'symquote');
 
     ok($DB->begin('SET_Default'), 'begin');
@@ -293,7 +293,7 @@ sub _create_table_colors
 		(
 			nval INT      NOT NULL PRIMARY KEY AUTO_INCREMENT,
 			sval TINYBLOB NOT NULL
-		) Type=innodb
+		) Engine=innodb
 	});
 	foreach my $sval (qw(blue red yellow green aqua cyan))
 	{

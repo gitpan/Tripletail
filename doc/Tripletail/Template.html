@@ -596,7 +596,7 @@ loadTemplate に先立ってテンプレートファイルが存在するかど�
 
 <p>
 <span class="pod_lang">HTMLテンプレート中のフォームを解析し、中にセットされている
-データを <a href=".././Tripletail/Form.html">Tripletail::Form</a> オブジェクトの形式で取り出す。
+データを <a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a> オブジェクトの形式で取り出す。
 
 </span>
 </p>
@@ -625,14 +625,14 @@ loadTemplate に先立ってテンプレートファイルが存在するかど�
   $t-&gt;setForm($hashref, $name)</code></pre>
 
 <p>
-<span class="pod_lang">渡された <a href=".././Tripletail/Form.html">Tripletail::Form</a> オブジェクトを、HTMLテンプレート中のフォームに
+<span class="pod_lang">渡された <a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a> オブジェクトを、HTMLテンプレート中のフォームに
 展開する。
 
 </span>
 </p>
 
 <p>
-<span class="pod_lang"><a href=".././Tripletail/Form.html">Tripletail::Form</a>オブジェクトの代わりにハッシュのリファレンスを渡すことも出来る。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a>オブジェクトの代わりにハッシュのリファレンスを渡すことも出来る。
 ハッシュのリファレンスを渡した場合は、$TL-&gt;newForm($hashref) した結果のフォームオブジェクトをセットする。
 
 </span>
@@ -712,14 +712,14 @@ extForm を行った場合はそれらの操作を行わない。
   $t-&gt;addHiddenForm($hashref, $name)</code></pre>
 
 <p>
-<span class="pod_lang">渡された <a href=".././Tripletail/Form.html">Tripletail::Form</a> オブジェクトを、HTMLテンプレート中のフォームに
+<span class="pod_lang">渡された <a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a> オブジェクトを、HTMLテンプレート中のフォームに
 &lt;input type=&quot;hidden&quot;&gt; 要素として追加する。
 
 </span>
 </p>
 
 <p>
-<span class="pod_lang"><a href=".././Tripletail/Form.html">Tripletail::Form</a>オブジェクトの代わりにハッシュのリファレンスを渡すことも出来る。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a>オブジェクトの代わりにハッシュのリファレンスを渡すことも出来る。
 ハッシュのリファレンスを渡した場合は、$TL-&gt;newForm($hashref) した結果のフォームオブジェクトを追加する。
 
 </span>
@@ -965,7 +965,7 @@ Templateの場合、全体を出力する。
 <pre class="pod_verbatim"><code>  allow_unexpanded_tags = true</code></pre>
 
 <p>
-<span class="pod_lang">非推奨オプション。tureを指定した場合、
+<span class="pod_lang">非推奨オプション。trueを指定した場合、
 getForm, setForm, extForm, addHiddenForm, addSessionCheckを
 実行する場合に、テンプレートに未置換の &lt;&amp;タグ&gt; が、
 &lt;foo &lt;&amp;tag&gt;&gt; のように HTML タグの内部に存在していても、

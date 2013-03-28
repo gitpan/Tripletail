@@ -58,8 +58,8 @@ Tripletail::DB - DBI のラッパ
 
 </span></a>
 </li>
-<li><a href="#Tripletail::DB::STH_Xe3X83Xa1Xe3X82XbdXe3X83X83Xe3X83X89">
-<span class="pod_lang"><code class="pod_iseq_C">Tripletail::DB::STH</code> メソッド
+<li><a href="#Tripletail::DB::Sth_Xe3X83Xa1Xe3X82XbdXe3X83X83Xe3X83X89">
+<span class="pod_lang"><code class="pod_iseq_C">Tripletail::DB::Sth</code> メソッド
 
 </span></a>
 </li>
@@ -631,7 +631,7 @@ setDefaultSetによってデフォルトが選ばれていない場合には例�
 die した場合にはロールバックされる。
 コードの中で明示的にコミット若しくはロールバックを行うこともできる。
 明示的にコミット若しくはロールバックをした後は、 <code class="pod_iseq_C">tx</code> を抜けるまで
-DB 操作は禁止される。 この間の DB 操作は例外を発生させる。 
+DB 操作は禁止される。 この間の DB 操作は例外を発生させる。
 
 </span>
 </p>
@@ -866,6 +866,148 @@ DBセットで SQL が実行される。
   $TL-&gt;log(DBDATA =&gt; $array-&gt;[0]);</code></pre>
 
 </dd>
+<dt><a id="upsert"><span class="pod_lang"><code class="pod_iseq_C">upsert</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  $DB-&gt;upsert(
+      'table1',
+      {key1 =&gt; 'val1', key2 =&gt; 'val2'},  # $keys
+      {val3 =&gt; 'val3', val4 =&gt; 'val4'}); # $values
+
+  $DB-&gt;upsert(
+      'schema1', # スキーマ名
+      'table1',
+      {key1 =&gt; 'val1', key2 =&gt; 'val2'},  # $keys
+      {val3 =&gt; 'val3', val4 =&gt; 'val4'}); # $values
+
+  $DB-&gt;upsert(
+      \'SET_W_Trans',
+      'table1',
+      {key1 =&gt; 'val1', key2 =&gt; 'val2'},  # $keys
+      {val3 =&gt; 'val3', val4 =&gt; 'val4'}); # $values</code></pre>
+
+<p>
+<span class="pod_lang">テーブルの特定の一行に対して UPDATE を実行し、もし該当行が存在しなければ
+INSERT を実行するという処理を、たとえトランザクションの外で行われた場合であってもアトミックに行う。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">与えられたテーブル名やスキーマ名は、内部で自動的に <a href="http://search.cpan.org/perldoc/symquote">symquote</a> した上で SQL 文に埋め込まれる。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang"><code class="pod_iseq_C">$keys</code> はテーブルの一意キー（通常は主キー）からその値へのハッシュテーブル。
+その内容はテーブルの一意キーが渡っているカラムと一致していなければならない。
+つまりこのキー集合によってテーブル上のカラムを常に一意に特定する事ができなければならない。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang"><code class="pod_iseq_C">$values</code> はそれ以外のカラム名からその値へのハッシュテーブルであり、省略も可能。
+上記の例に挙げたコードは、まず次のような UPDATE 文を実行し、
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code>  UPDATE table1
+     SET val3 = 'val3', val4 = 'val4'
+   WHERE key1 = 'val1', key2 = 'val2'</code></pre>
+
+<p>
+<span class="pod_lang">該当する行が存在しなければ次のような INSERT 文を実行する。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code>  INSERT INTO table1
+              ( key1 ,  key2 ,  val3 ,  val4 )
+       VALUES ('val1', 'val2', 'val3', 'val4')</code></pre>
+
+<p>
+<span class="pod_lang">現在 pgsql のみで利用可能。
+
+</span>
+</p>
+
+</dd>
+<dt><a id="findTables"><span class="pod_lang"><code class="pod_iseq_C">findTables</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  my $sth = $DB-&gt;findTables({
+                set    =&gt; 'SET_W_Trans', # 省略可能
+                schema =&gt; 'schema',      # 省略可能
+                table  =&gt; 'table\\_%'    # 省略可能
+              });
+  while (my $row = $sth-&gt;fetchHash) {
+      print $row-&gt;{TABLE_NAME}, &quot;\n&quot;;
+  }</code></pre>
+
+<p>
+<span class="pod_lang">データベース内に存在するテーブルの一覧を得るための <code class="pod_iseq_C">Tripletail::DB::Sth</code> オブジェクトを返す。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">スキーマ名やテーブル名に <code class="pod_iseq_C">_</code> または <code class="pod_iseq_C">%</code> 記号が含まれていた場合は、その文字列は
+LIKE 演算子のワイルドカードと見倣される。省略も可能であり、その場合は全てのスキーマ名または全てのテーブル名にマッチする
+<code class="pod_iseq_C">'%'</code> が指定された場合と同様の結果になる。<code class="pod_iseq_C">undef</code> の場合も同様。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">このメソッドにより得られた <code class="pod_iseq_C">Tripletail::DB::Sth</code> オブジェクトの返す各行は
+<code class="pod_iseq_C">DBI-&gt;table_info()</code> と同等である。詳しくは
+<a href="http://search.cpan.org/dist/DBI/DBI.pm#table_info">http://search.cpan.org/dist/DBI/DBI.pm#table_info</a> を参照。
+
+</span>
+</p>
+
+</dd>
+<dt><a id="getTableColumns"><span class="pod_lang"><code class="pod_iseq_C">getTableColumns</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  my $columns_ref = $DB-&gt;getTableColumns(\'SET_W_Trans', 'schema', 'table');
+  my $columns_ref = $DB-&gt;getTableColumns(\'SET_W_Trans', 'table');
+  my $columns_ref = $DB-&gt;getTableColumns('schema', 'table');
+  my $columns_ref = $DB-&gt;getTableColumns('table');
+
+  if ($columns_ref) {
+      foreach my $column_ref (@$columns_ref) {
+          printf(
+              &quot;%s :: %s\n&quot;,
+              $column_ref-&gt;{ COLUMN_NAME },
+              $column_ref-&gt;{ TYPE_NAME   });
+      }
+  }
+  else {
+      print &quot;table not found\n&quot;;
+  }</code></pre>
+
+<p>
+<span class="pod_lang">テーブルの持つカラムの一覧を、ハッシュリファレンスを要素とする配列リファレンスで返す。
+その要素であるカラム情報は <code class="pod_iseq_C">DBI-&gt;column_info()</code> から得られるものと同等である。
+詳しくは <a href="http://search.cpan.org/dist/DBI/DBI.pm#column_info">http://search.cpan.org/dist/DBI/DBI.pm#column_info</a> を参照。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">指定されたテーブルが存在しない場合、このメソッドは <code class="pod_iseq_C">undef</code> を返す。
+
+</span>
+</p>
+
+</dd>
 <dt><a id="lock"><span class="pod_lang"><code class="pod_iseq_C">lock</code>
 
 </span></a></dt>
@@ -892,6 +1034,20 @@ DBセットで SQL が実行される。
 
 </span>
 </p>
+
+<p>
+<span class="pod_lang">mysql ではロック中にテーブルのエイリアスを使用する場合、エイリアスに対してもロックを指定する必要がある。これを行うには、テーブル名の文字列の替わりにハッシュのリファレンス {'テーブル名' =&gt; 'エイリアス'} を指定する。次に、テーブル sample とそのエイリアス A, B をロックする例を示す。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code>  $DB-&gt;lock(read =&gt; ['sample', {'sample' =&gt; 'A'}, {'sample' =&gt; 'B'}]);
+  $DB-&gt;execute(q{
+    SELECT sample.nval, A.nval as A, B.nval as B 
+    FROM sample, sample AS A, sample AS B 
+    WHERE sample.nval + 1 = A.nval AND A.nval + 1 = B.nval
+  });
+  $DB-&gt;unlock;</code></pre>
 
 </dd>
 <dt><a id="unlock"><span class="pod_lang"><code class="pod_iseq_C">unlock</code>
@@ -929,6 +1085,25 @@ DBセットで SQL が実行される。
 </p>
 
 </dd>
+<dt><a id="quote"><span class="pod_lang"><code class="pod_iseq_C">quote</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  $DB-&gt;quote($literal)</code></pre>
+
+<p>
+<span class="pod_lang">文字列をリテラルとしてクォートする。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">通常 <code class="pod_iseq_C">'a b c'</code> のようにシングルクオートで文字列が囲まれる。
+
+</span>
+</p>
+
+</dd>
 <dt><a id="symquote"><span class="pod_lang"><code class="pod_iseq_C">symquote</code>
 
 </span></a></dt>
@@ -946,6 +1121,25 @@ DBセットで SQL が実行される。
 
 </span>
 </p>
+
+</dd>
+<dt><a id="escapeLike"><span class="pod_lang"><code class="pod_iseq_C">escapeLike</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  $DB-&gt;escapeLike($pattern)</code></pre>
+
+<p>
+<span class="pod_lang">与えられた文字列を LIKE 演算子のパターンと見倣して、そのワイルドカード記号をエスケープする。
+エスケープの方法は各データベースエンジンによって異なるが、多くの場合は次の式が成立する。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code>  $DB-&gt;escapeLike('foo') eq 'foo'
+  $DB-&gt;escapeLike('f_o') eq 'f\\_o'
+  $DB-&gt;escapeLike('f%o') eq 'f\\%o'
+  $DB-&gt;escapeLike('f\\') eq 'f\\\\'</code></pre>
 
 </dd>
 <dt><a id="getType"><span class="pod_lang"><code class="pod_iseq_C">getType</code>
@@ -998,8 +1192,8 @@ DBセットで SQL が実行される。
 </dd>
 </dl>
 
-<h3><a id="Tripletail::DB::STH_Xe3X83Xa1Xe3X82XbdXe3X83X83Xe3X83X89">
-<span class="pod_lang"><code class="pod_iseq_C">Tripletail::DB::STH</code> メソッド
+<h3><a id="Tripletail::DB::Sth_Xe3X83Xa1Xe3X82XbdXe3X83X83Xe3X83X89">
+<span class="pod_lang"><code class="pod_iseq_C">Tripletail::DB::Sth</code> メソッド
 
 </span></a></h3>
 
@@ -1124,6 +1318,7 @@ DBセットは、予約済みではない名前であれば任意の名称が使
 
 <pre class="pod_verbatim"><code>  [DB]
   namequery=1
+  autoretry=1
   type=mysql
   defaultset=SET_R_Trans
   SET_W_Trans=CON_DBW1
@@ -1166,6 +1361,26 @@ DBセットは、予約済みではない名前であれば任意の名称が使
 </p>
 
 </dd>
+<dt><a id="autoretry"><span class="pod_lang"><code class="pod_iseq_C">autoretry</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  autoretry = 1</code></pre>
+
+<p>
+<span class="pod_lang">これを 1 にすると <a href="#tx">&quot;tx&quot;</a> を用いて実行されたトランザクションがデッドロックにより失敗した場合に自動的にトランザクションを再実行する。
+データベースがデッドロック検出機構を持っていない場合には再実行は行われない。デフォルトは 0。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">なお単体の <a href="#execute">&quot;execute&quot;</a> がデッドロックを起こした場合には、この設定とは無関係に必ず再実行される。
+
+</span>
+</p>
+
+</dd>
 <dt><a id="type"><span class="pod_lang"><code class="pod_iseq_C">type</code>
 
 </span></a></dt>
@@ -1174,7 +1389,7 @@ DBセットは、予約済みではない名前であれば任意の名称が使
 
 <p>
 <span class="pod_lang">DBの種類を選択する。
-mysql, pgsql, oracle, sqlite, mssql が使用可能。
+mysql, pgsql, oracle, interbase, sqlite, mssql が使用可能。
 必須項目。
 
 </span>
@@ -1296,9 +1511,9 @@ mysql, pgsql, oracle, sqlite, mssql が使用可能。
 </span></a></h3>
 
 <p>
-<span class="pod_lang">試験的に SQL Server との接続が実装されています. 
+<span class="pod_lang">試験的に SQL Server との接続が実装されています.
 DBD::ODBC と, Linux であれば unixODBC + freetds で, Windows であれば
-組み込みの ODBC マネージャで動作します. 
+組み込みの ODBC マネージャで動作します.
 
 </span>
 </p>
@@ -1417,19 +1632,23 @@ Tripletail::DB - DBI のラッパ
 <li><a href="#SQL_Server_Xe8Xa8XadXe5XaeX9a">SQL Server 設定</a></li>
 <li><a href="#SYNOPSIS">SYNOPSIS</a></li>
 <li><a href="#Tripletail::DB_Xe3X83Xa1Xe3X82XbdXe3X83X83Xe3X83X89">Tripletail::DB メソッド</a></li>
-<li><a href="#Tripletail::DB::STH_Xe3X83Xa1Xe3X82XbdXe3X83X83Xe3X83X89">Tripletail::DB::STH メソッド</a></li>
+<li><a href="#Tripletail::DB::Sth_Xe3X83Xa1Xe3X82XbdXe3X83X83Xe3X83X89">Tripletail::DB::Sth メソッド</a></li>
+<li><a href="#autoretry">autoretry</a></li>
 <li><a href="#begin">begin</a></li>
 <li><a href="#commit">commit</a></li>
 <li><a href="#connect">connect</a></li>
 <li><a href="#dbname">dbname</a></li>
 <li><a href="#defaultset">defaultset</a></li>
 <li><a href="#disconnect">disconnect</a></li>
+<li><a href="#escapeLike">escapeLike</a></li>
 <li><a href="#execute">execute</a></li>
 <li><a href="#fetchArray">fetchArray</a></li>
 <li><a href="#fetchHash">fetchHash</a></li>
+<li><a href="#findTables">findTables</a></li>
 <li><a href="#finish">finish</a></li>
 <li><a href="#getDbh">getDbh</a></li>
 <li><a href="#getLastInsertId">getLastInsertId</a></li>
+<li><a href="#getTableColumns">getTableColumns</a></li>
 <li><a href="#getType">getType</a></li>
 <li><a href="#host">host</a></li>
 <li><a href="#inTx">inTx</a></li>
@@ -1441,6 +1660,7 @@ Tripletail::DB - DBI のラッパ
 <li><a href="#namequery">namequery</a></li>
 <li><a href="#password">password</a></li>
 <li><a href="#prepare/executeXe3X82X92Xe5X88X86Xe3X81X91Xe3X81XaaXe3X81X84Xe3X80X82fetchXe3X81XafXe5X88X86Xe3X81X91Xe3X82X8bXe3X81X93Xe3X81Xa8Xe3X82X82Xe3X81Xa7Xe3X81X8dXe3X82X8bXe3X80X82">prepare/executeを分けない。fetchは分けることもできる。</a></li>
+<li><a href="#quote">quote</a></li>
 <li><a href="#ret">ret</a></li>
 <li><a href="#rollback">rollback</a></li>
 <li><a href="#rows">rows</a></li>
@@ -1454,6 +1674,7 @@ Tripletail::DB - DBI のラッパ
 <li><a href="#tx">tx</a></li>
 <li><a href="#type">type</a></li>
 <li><a href="#unlock">unlock</a></li>
+<li><a href="#upsert">upsert</a></li>
 <li><a href="#user">user</a></li>
 <li><a href="#Xe3X83X97Xe3X83XacXe3X83XbcXe3X82Xb9Xe3X83X9bXe3X83XabXe3X83X80Xe3X81XaeXe5X80Xa4Xe6Xb8Xa1Xe3X81X97Xe3X81XaeXe9X9aX9bXe3X81XabXe5X9eX8bXe6X8cX87Xe5XaeX9aXe3X81X8cXe5X8fXafXe8X83Xbd">プレースホルダの値渡しの際に型指定が可能</a></li>
 <li><a href="#Xe3X83Xa9Xe3X83X83Xe3X83X91Xe3X81XabXe5X90X8cXe7XadX89Xe3X81XaeXe6Xa9X9fXe8X83XbdXe3X81X8cXe7X94Xa8Xe6X84X8fXe3X81X95Xe3X82X8cXe3X81Xa6Xe3X81X84Xe3X81XaaXe3X81X84Xe5Xa0Xb4Xe5X90X88Xe3X80X82">ラッパに同等の機能が用意されていない場合。</a></li>

@@ -1,54 +1,58 @@
+# -*- perl -*-
 use Test::More;
 use Test::Exception;
 use strict;
 use warnings;
 
-
+my %DBINFO;
 BEGIN {
-    my ($name) = eval{getpwuid($<)} || $ENV{USERNAME};
-    $name = $name && $name=~/^(\w+)$/ ? $1 : 'guest';
-    
-    open my $fh, '>', "tmp$$.ini";
-    print $fh qq{
-[TL]
-trap = none
+    %DBINFO = (
+        dbname   => $ENV{MYSQL_DBNAME} || 'test',
+        user     => $ENV{MYSQL_USER  } || '',
+        password => $ENV{MYSQL_PASS  } || '',
+        host     => $ENV{MYSQL_HOST  } || '',
+       );
+}
 
-[DB]
-type   = mysql
-Default = DBR1
-
-[DBR1]
-host   = localhost
-user   = $name
-dbname = test
+use lib '.';
+use t::make_ini {
+    ini => {
+        TL => {
+            trap => 'none',
+        },
+        DB => {
+            type       => 'mysql',
+            defaultset => 'Default',
+            Default    => 'DBR1',
+        },
+        DBR1 => \%DBINFO,
+    },
 };
-    close $fh;
-    eval q{use Tripletail "tmp$$.ini"};
+use Tripletail $t::make_ini::INI_FILE;
+
+my $has_DBD_mysql = eval 'use DBD::mysql;1';
+if (!$has_DBD_mysql) {
+    plan skip_all => 'no DBD::mysql';
 }
 
-END {
-    unlink "tmp$$.ini";
+if (!$DBINFO{dbname}) {
+    plan skip_all => 'no MYSQL_DBNAME';
 }
-
-eval { require DBD::mysql; 1; };
-$@ and plan skip_all => "no DBD::mysql";
-
-my $planned;
 
 eval {
     $TL->trapError(
-	-DB   => 'DB',
-	-main => \&main,
+        -DB   => 'DB',
+        -main => sub {},
        );
 };
 if ($@) {
-	if (not $planned) {
-		plan skip_all => "Failed to connect to local MySQL: $@";
-	}
-	else {
-		die $@;
-	}
+    plan skip_all => "Failed to connect to the MySQL: $@";
 }
+
+$TL->trapError(
+    -DB   => 'DB',
+    -main => \&main,
+   );
 
 sub trim ($) {
     $_ = shift;
@@ -57,7 +61,7 @@ sub trim ($) {
 }
 
 sub main {
-my $TMPL = q{
+    my $TMPL = q{
   <!begin:paging>
     <!begin:PrevLink><a href="<&PREVLINK>">←前ページ</a><!end:PrevLink>
     <!begin:NoPrevLink>←前ページ<!end:NoPrevLink>
@@ -90,7 +94,7 @@ my $TMPL = q{
   <!end:overpage>
 };
 
-my $ANS = q{
+    my $ANS = q{
 ←前ページ
 1
 <a href="./?pageid=2&amp;INT=1">2</a>
@@ -141,137 +145,135 @@ my $ANS = q{
 <!mark:overpage>};
 
     plan tests => 86;
-	$planned = 1;
 
-    my $DB;
-	$DB = $TL->getDB('DB');
-        $DB->setDefaultSet('Default');
-        $DB->begin;
+    my $DB = $TL->getDB('DB');
+    $DB->tx(
+        sub {
+            $DB->execute(q{
+                DROP TABLE IF EXISTS TripletaiL_DB_Test
+              });
+            $DB->execute(q{
+                CREATE TABLE TripletaiL_DB_Test (
+                    foo BLOB,
+                    bar BLOB,
+                    baz BLOB
+                )
+              });
+            for (my $i = 0; $i < 100; $i++){
+                $DB->execute(q{
+                    INSERT INTO TripletaiL_DB_Test
+                           (foo, bar, baz)
+                    VALUES (?,   ?,   ?  )
+                  }, $i, 'WWW', 'EEE');
+            }
+        });
 
-	$DB->execute(q{
-		DROP TABLE IF EXISTS TripletaiL_DB_Test
-	});
-	$DB->execute(q{
-           CREATE TABLE TripletaiL_DB_Test (
-            foo   BLOB,
-            bar   BLOB,
-            baz   BLOB
-        )
-    });
-for(my $i = 0;$i < 100;$i++){
-	$DB->execute(
-		\'Default' => q{
-        INSERT INTO TripletaiL_DB_Test
-               (foo, bar, baz)
-        VALUES (?,   ?,   ?  )
-    }, $i, 'WWW', 'EEE');
-}
-	$DB->commit;
+    my $pager;
+    ok($pager = $TL->newPager($DB), 'newPager');
 
-my $pager;
-  ok($pager = $TL->newPager($DB), 'newPager');
+    ok($pager->setCurrentPage(1), 'setCurrentPage');
 
-  ok($pager->setCurrentPage(1), 'setCurrentPage');
+    my $t = $TL->newTemplate;
+    $t->setTemplate($TMPL);
 
-  my $t = $TL->newTemplate;
-  $t->setTemplate($TMPL);
+    dies_ok {$pager->paging} 'paging die';
+    dies_ok {$pager->paging(\123)} 'paging die';
+    dies_ok {$pager->paging($t)} 'paging die';
+    dies_ok {$pager->paging($t->node('paging'))} 'paging die';
+    dies_ok {$pager->paging($t->node('paging'),\123)} 'paging die';
+    dies_ok {$pager->paging($t->node('paging'),['SELECT * FROM TripletaiL_DB_Test',\123])} 'paging die';
+    dies_ok {$pager->paging($t->node('paging'),['SELECT * FROM TripletaiL_DB_Test',-10])} 'paging die';
 
-  dies_ok {$pager->paging} 'paging die';
-  dies_ok {$pager->paging(\123)} 'paging die';
-  dies_ok {$pager->paging($t)} 'paging die';
-  dies_ok {$pager->paging($t->node('paging'))} 'paging die';
-  dies_ok {$pager->paging($t->node('paging'),\123)} 'paging die';
-  dies_ok {$pager->paging($t->node('paging'),['SELECT * FROM TripletaiL_DB_Test',\123])} 'paging die';
-  dies_ok {$pager->paging($t->node('paging'),['SELECT * FROM TripletaiL_DB_Test',-10])} 'paging die';
+    my $paging;
+    ok($pager = $TL->newPager($DB), 'newPager');
+    ok($paging = $pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'),'paging');
+    if (!defined($paging)) {
+        my $info = $pager->getPagingInfo;
+        $t->node('overpage')->add(MAXPAGES => $info->{maxpages});
+    }
+    elsif ($paging == 0) {
+        $t->node('nodata')->add;
+    }
+    else {
+        $t->node('paging')->add;
+    }
 
-my $paging;
-  ok($pager = $TL->newPager($DB), 'newPager');
-  ok($paging = $pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'),'paging');
-  if(!defined($paging)) {
-    my $info = $pager->getPagingInfo;
-    $t->node('overpage')->add(MAXPAGES => $info->{maxpages});
-  } elsif($paging == 0) {
-    $t->node('nodata')->add;
-  } else {
-    $t->node('paging')->add;
-  }
-
-is(trim $t->getHtml, trim $ANS, 'paging (1)');
+    is(trim $t->getHtml, trim $ANS, 'paging (1)');
 
 
-ok(my $info = $pager->getPagingInfo,'getPagingInfo');
-is(ref($info->{db}),'Tripletail::DB','db');
-is($info->{pagesize},30,'pagesize');
-is($info->{current},1,'current');
-is($info->{maxlinks},10,'maxlinks');
-is($info->{formkey},'pageid','formkey');
-#is($info->{formparam},undef,'formparam');
-is($info->{pagingtype},0,'pagingtype');
-is($info->{maxpages},4,'maxpage');
-is($info->{linkstart},1,'linkstart');
-is($info->{linkend},4,'linkend');
-is($info->{maxrows},100,'maxrows');
-is($info->{beginrow},0,'beginrow');
-is($info->{rows},30,'rows');
+    ok(my $info = $pager->getPagingInfo,'getPagingInfo');
+    isa_ok($info->{db}, 'Tripletail::DB', 'db');
+    is($info->{pagesize},30,'pagesize');
+    is($info->{current},1,'current');
+    is($info->{maxlinks},10,'maxlinks');
+    is($info->{formkey},'pageid','formkey');
+    #is($info->{formparam},undef,'formparam');
+    is($info->{pagingtype},0,'pagingtype');
+    is($info->{maxpages},4,'maxpage');
+    is($info->{linkstart},1,'linkstart');
+    is($info->{linkend},4,'linkend');
+    is($info->{maxrows},100,'maxrows');
+    is($info->{beginrow},0,'beginrow');
+    is($info->{rows},30,'rows');
 
- ok($pager->setCurrentPage(2), 'setCurrentPage');
- ok($paging = $pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'),'paging');
+    ok($pager->setCurrentPage(2), 'setCurrentPage');
+    ok($paging = $pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'),'paging');
 
- ok($pager->setCurrentPage(3), 'setCurrentPage');
- ok($paging = $pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'),'paging');
+    ok($pager->setCurrentPage(3), 'setCurrentPage');
+    ok($paging = $pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'),'paging');
 
- ok($pager->setCurrentPage(4), 'setCurrentPage');
- ok($paging = $pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'),'paging');
+    ok($pager->setCurrentPage(4), 'setCurrentPage');
+    ok($paging = $pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'),'paging');
 
- is($pager->paging($t->node('paging'),['SELECT * FROM TripletaiL_DB_Test',0]), 0 ,'setCurrentPage');
+    is($pager->paging($t->node('paging'),['SELECT * FROM TripletaiL_DB_Test',0]), 0 ,'setCurrentPage');
 
- ok($pager = $TL->newPager, 'newPager');
- ok($pager = $TL->newPager('DB'), 'newPager (obsolute)');
- ok($pager = $TL->newPager($DB), 'newPager');
+    ok($pager = $TL->newPager, 'newPager');
+    ok($pager = $TL->newPager('DB'), 'newPager (obsolute)');
+    ok($pager = $TL->newPager($DB), 'newPager');
 
-  dies_ok {$pager->setDbGroup(\123)} 'setDbGroup die (obsolute)';
-  ok($pager->setDbGroup('DB'), 'setDbGroup (obsolute)');
+    dies_ok {$pager->setDbGroup(\123)} 'setDbGroup die (obsolute)';
+    ok($pager->setDbGroup('DB'), 'setDbGroup (obsolute)');
 
-  dies_ok {$pager->setPageSize} 'setPageSize die';
-  dies_ok {$pager->setPageSize(\123)} 'setPageSize die';
-  dies_ok {$pager->setPageSize('aaa')} 'setPageSize die';
-  dies_ok {$pager->setPageSize(0)} 'setPageSize die';
-  dies_ok {$pager->setPageSize(-10)} 'setPageSize die';
-  ok($pager->setPageSize(100), 'setPageSize');
+    dies_ok {$pager->setPageSize} 'setPageSize die';
+    dies_ok {$pager->setPageSize(\123)} 'setPageSize die';
+    dies_ok {$pager->setPageSize('aaa')} 'setPageSize die';
+    dies_ok {$pager->setPageSize(0)} 'setPageSize die';
+    dies_ok {$pager->setPageSize(-10)} 'setPageSize die';
+    ok($pager->setPageSize(100), 'setPageSize');
 
-  dies_ok {$pager->setCurrentPage} 'setCurrentPage die';
-  dies_ok {$pager->setCurrentPage(\123)} 'setCurrentPage die';
-  dies_ok {$pager->setCurrentPage('aaa')} 'setCurrentPage die';
-  dies_ok {$pager->setCurrentPage(0)} 'setCurrentPage die';
-  dies_ok {$pager->setCurrentPage(-10)} 'setCurrentPage die';
-  ok($pager->setCurrentPage(2), 'setCurrentPage');
+    dies_ok {$pager->setCurrentPage} 'setCurrentPage die';
+    dies_ok {$pager->setCurrentPage(\123)} 'setCurrentPage die';
+    dies_ok {$pager->setCurrentPage('aaa')} 'setCurrentPage die';
+    dies_ok {$pager->setCurrentPage(0)} 'setCurrentPage die';
+    dies_ok {$pager->setCurrentPage(-10)} 'setCurrentPage die';
+    ok($pager->setCurrentPage(2), 'setCurrentPage');
 
-  dies_ok {$pager->setMaxLinks} 'setMaxLinks die';
-  dies_ok {$pager->setMaxLinks(\123)} 'setMaxLinks die';
-  dies_ok {$pager->setMaxLinks('aaa')} 'setMaxLinks die';
-  dies_ok {$pager->setMaxLinks(0)} 'setMaxLinks die';
-  dies_ok {$pager->setMaxLinks(-10)} 'setMaxLinks die';
-  ok($pager->setMaxLinks(1), 'setMaxLinks');
+    dies_ok {$pager->setMaxLinks} 'setMaxLinks die';
+    dies_ok {$pager->setMaxLinks(\123)} 'setMaxLinks die';
+    dies_ok {$pager->setMaxLinks('aaa')} 'setMaxLinks die';
+    dies_ok {$pager->setMaxLinks(0)} 'setMaxLinks die';
+    dies_ok {$pager->setMaxLinks(-10)} 'setMaxLinks die';
+    ok($pager->setMaxLinks(1), 'setMaxLinks');
 
-  dies_ok {$pager->setFormKey} 'setFormKey die';
-  dies_ok {$pager->setFormKey(\123)} 'setFormKey die';
-  ok($pager->setFormKey('PAGE'), 'setFormKey');
+    dies_ok {$pager->setFormKey} 'setFormKey die';
+    dies_ok {$pager->setFormKey(\123)} 'setFormKey die';
+    ok($pager->setFormKey('PAGE'), 'setFormKey');
 
-  dies_ok {$pager->setFormParam(\123)} 'setFormKey die';
-  ok($pager->setFormParam($TL->newForm(ddd => 666)), 'setFormKey');
-  ok($pager->setFormParam({ddd => 666}), 'setFormKey');
+    dies_ok {$pager->setFormParam(\123)} 'setFormKey die';
+    ok($pager->setFormParam($TL->newForm(ddd => 666)), 'setFormKey');
+    ok($pager->setFormParam({ddd => 666}), 'setFormKey');
 
-  dies_ok {$pager->setToLink(\123)} 'setToLink die';
-  ok($pager->setToLink('PAGE'), 'setToLink');
+    dies_ok {$pager->setToLink(\123)} 'setToLink die';
+    ok($pager->setToLink('PAGE'), 'setToLink');
 
-  dies_ok {$pager->setPagingType} 'setPagingType die';
-  dies_ok {$pager->setPagingType(\123)} 'setPagingType die';
-  dies_ok {$pager->setPagingType('aaa')} 'setPagingType die';
-  dies_ok {$pager->setPagingType(2)} 'setPagingType die';
-  dies_ok {$pager->setPagingType(-10)} 'setPagingType die';
-  ok($pager->setPagingType(1), 'setPagingType');
+    dies_ok {$pager->setPagingType} 'setPagingType die';
+    dies_ok {$pager->setPagingType(\123)} 'setPagingType die';
+    dies_ok {$pager->setPagingType('aaa')} 'setPagingType die';
+    dies_ok {$pager->setPagingType(2)} 'setPagingType die';
+    dies_ok {$pager->setPagingType(-10)} 'setPagingType die';
+    ok($pager->setPagingType(1), 'setPagingType');
 
-my $TMPL2 = q{
+    my $TMPL2 = q{
   <!begin:paging>
     <!begin:PrevLink><a href="<&PREVLINK>">←前ページ</a><!end:PrevLink>
     <!begin:NoPrevLink>←前ページ<!end:NoPrevLink>
@@ -298,69 +300,73 @@ my $TMPL2 = q{
   <!end:overpage>
 };
 
-  $t->setTemplate($TMPL2);
+    $t->setTemplate($TMPL2);
 
-  ok($paging = $pager->pagingArray($t->node('paging'), ['SELECT * FROM TripletaiL_DB_Test',100]),'pagingArray');
-  if(!defined($paging)) {
-    $info = $pager->getPagingInfo;
-    $t->node('overpage')->add(MAXPAGES => $info->{maxpages});
-  } elsif($paging == 0) {
-    $t->node('nodata')->add;
-  } else {
-    foreach my $key (@$paging){
-       $t->node('paging')->add(FOO => $key->[0],BAR => $key->[1],BAZ => $key->[2],);
+    ok($paging = $pager->pagingArray($t->node('paging'), ['SELECT * FROM TripletaiL_DB_Test',100]),'pagingArray');
+    if (!defined($paging)) {
+        $info = $pager->getPagingInfo;
+        $t->node('overpage')->add(MAXPAGES => $info->{maxpages});
     }
-  }
-
-  $t->setTemplate($TMPL2);
-
-  ok($paging = $pager->pagingHash($t->node('paging'), ['SELECT * FROM TripletaiL_DB_Test',100]),'pagingHash');
-  if(!defined($paging)) {
-    $info = $pager->getPagingInfo;
-    $t->node('overpage')->add(MAXPAGES => $info->{maxpages});
-  } elsif($paging == 0) {
-    $t->node('nodata')->add;
-  } else {
-    foreach my $key (@$paging){
-       $t->node('paging')->add(FOO => $key->{foo},BAR => $key->{bar},BAZ => $key->{baz},);
+    elsif ($paging == 0) {
+        $t->node('nodata')->add;
     }
-  }
+    else {
+        foreach my $key (@$paging) {
+            $t->node('paging')->add(FOO => $key->[0],BAR => $key->[1],BAZ => $key->[2],);
+        }
+    }
 
-  $t->setTemplate($TMPL);
-  $pager = $TL->newPager('DB');
-  ok($pager->setCurrentPage(5), 'setCurrentPage');
-  is($pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), undef ,'paging');
+    $t->setTemplate($TMPL2);
 
-  $t->setTemplate($TMPL);
-  $pager = $TL->newPager('DB');
-  ok($pager->setCurrentPage(5), 'setCurrentPage');
-  is($pager->pagingArray($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), undef ,'pagingArray');
+    ok($paging = $pager->pagingHash($t->node('paging'), ['SELECT * FROM TripletaiL_DB_Test',100]),'pagingHash');
+    if (!defined($paging)) {
+        $info = $pager->getPagingInfo;
+        $t->node('overpage')->add(MAXPAGES => $info->{maxpages});
+    }
+    elsif ($paging == 0) {
+        $t->node('nodata')->add;
+    }
+    else {
+        foreach my $key (@$paging) {
+            $t->node('paging')->add(FOO => $key->{foo},BAR => $key->{bar},BAZ => $key->{baz},);
+        }
+    }
 
-  $t->setTemplate($TMPL);
-  $pager = $TL->newPager('DB');
-  ok($pager->setCurrentPage(5), 'setCurrentPage');
-  is($pager->pagingHash($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), undef ,'pagingHash');
+    $t->setTemplate($TMPL);
+    $pager = $TL->newPager('DB');
+    ok($pager->setCurrentPage(5), 'setCurrentPage');
+    is($pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), undef ,'paging');
 
-  $t->setTemplate($TMPL);
-  $pager = $TL->newPager('DB');
-  ok($pager->setPagingType(1), 'setPagingType');
-  ok($pager->setCurrentPage(5), 'setCurrentPage');
-  ok($pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), 'paging');
+    $t->setTemplate($TMPL);
+    $pager = $TL->newPager('DB');
+    ok($pager->setCurrentPage(5), 'setCurrentPage');
+    is($pager->pagingArray($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), undef ,'pagingArray');
 
-  $t->setTemplate($TMPL);
-  $pager = $TL->newPager('DB');
-  ok($pager->setPagingType(1), 'setPagingType');
-  ok($pager->setCurrentPage(5), 'setCurrentPage');
-  ok($pager->pagingArray($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), 'pagingArray');
+    $t->setTemplate($TMPL);
+    $pager = $TL->newPager('DB');
+    ok($pager->setCurrentPage(5), 'setCurrentPage');
+    is($pager->pagingHash($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), undef ,'pagingHash');
 
-  $t->setTemplate($TMPL);
-  $pager = $TL->newPager('DB');
-  ok($pager->setPagingType(1), 'setPagingType');
-  ok($pager->setCurrentPage(5), 'setCurrentPage');
-  ok($pager->pagingHash($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), 'pagingHash');
+    $t->setTemplate($TMPL);
+    $pager = $TL->newPager('DB');
+    ok($pager->setPagingType(1), 'setPagingType');
+    ok($pager->setCurrentPage(5), 'setCurrentPage');
+    ok($pager->paging($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), 'paging');
 
-	$DB->execute(q{
+    $t->setTemplate($TMPL);
+    $pager = $TL->newPager('DB');
+    ok($pager->setPagingType(1), 'setPagingType');
+    ok($pager->setCurrentPage(5), 'setCurrentPage');
+    ok($pager->pagingArray($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), 'pagingArray');
+
+    $t->setTemplate($TMPL);
+    $pager = $TL->newPager('DB');
+    ok($pager->setPagingType(1), 'setPagingType');
+    ok($pager->setCurrentPage(5), 'setCurrentPage');
+    ok($pager->pagingHash($t->node('paging'), 'SELECT * FROM TripletaiL_DB_Test'), 'pagingHash');
+
+    $DB->execute(q{
         DROP TABLE TripletaiL_DB_Test
-    });
+      });
 
 }

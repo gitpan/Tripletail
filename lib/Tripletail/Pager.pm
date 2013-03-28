@@ -9,10 +9,15 @@ use Tripletail;
 1;
 
 sub _new {
-	my $class = shift;
-	my $this = bless {} => $class;
-	my $db = shift;
-	$this->{db} = $db;
+    my $class = shift;
+    my $DB    = Tripletail::_isa($_[0], 'Tripletail::DB')
+              ? shift
+              : $TL->getDB(shift);
+
+    my $this = bless {} => $class;
+
+    $this->{db    } = $DB;
+    $this->{dbtype} = $DB->getType;
 
 	$this->{pagesize} = 30;
 	$this->{current} = 1;
@@ -29,7 +34,6 @@ sub _new {
 	$this->{maxrows} = undef;
 	$this->{beginrow} = undef;
 	$this->{rows} = undef;
-	
 
 	$this->setFormParam(undef);
 	$this;
@@ -55,8 +59,9 @@ sub setDbGroup {
 		die __PACKAGE__."#setDbGroup: arg[1] is a reference. [$dbgroup] (第1引数がリファレンスです)\n";
 	}
 
-	$this->{db} = $dbgroup;
-	$this;
+    $this->{db    } = $TL->getDB($dbgroup);
+    $this->{dbtype} = $this->{db}->getType;
+    $this;
 }
 
 sub setPageSize {
@@ -177,6 +182,24 @@ sub pagingHash {
 	$this->_paging(2, @_);
 }
 
+sub _set_limitoffset {
+    my $this = shift;
+    my $query = shift;
+
+    # 何行目から表示すれば良いのか計算。
+    $this->{beginrow} = ($this->{current} - 1) * $this->{pagesize};
+
+    # LIMITを勝手に付ける。
+    if($this->{dbtype} eq 'mysql') {
+        $query .= sprintf "\nLIMIT %d, %d", $this->{beginrow}, $this->{pagesize};
+    }
+    else {
+        $query .= sprintf "\nLIMIT %d\nOFFSET %d", $this->{pagesize}, $this->{beginrow};
+    }
+
+    $query;
+}
+
 sub _paging {
 	my $this = shift;
 	my $resulttype = shift; # 0:件数(Row展開有), 1:配列(Row展開無), 2:ハッシュ(Row展開無)
@@ -185,12 +208,7 @@ sub _paging {
 	my @params = @_;
 	my $result;
 
-	my $DB;
-	if(ref($this->{db}) eq 'Tripletail::DB') {
-		$DB = $this->{db};
-	} else {
-		$DB = $TL->getDB($this->{db});
-	}
+    my $DB = $this->{db};
 
 	if(ref($query) eq 'ARRAY') {
 		($query, $this->{maxrows}) = @$query;
@@ -218,14 +236,12 @@ sub _paging {
 		}
 	} else {
 	# SQL_CALC_FOUND_ROWSを勝手に付ける。
-		$query =~ s/SELECT/SELECT SQL_CALC_FOUND_ROWS/i;
+        if($this->{dbtype} eq 'mysql') {
+            $query =~ s/SELECT/SELECT SQL_CALC_FOUND_ROWS/i;
+        }
 	}
-
-	# 何行目から表示すれば良いのか計算。
-	$this->{beginrow} = ($this->{current} - 1) * $this->{pagesize};
-
-	# LIMITを勝手に付ける。
-	$query .= sprintf "\nLIMIT %d, %d", $this->{beginrow}, $this->{pagesize};
+    
+    $query = $this->_set_limitoffset($query);
 
 	# SQL実行
 	if($resulttype == 0) {
@@ -243,14 +259,32 @@ sub _paging {
 		$this->{rows} = scalar(@$result);
 	}
 
-	# 全部で何件あるか調べる
-	unless(defined($this->{maxrows})) {
-		my $sth = $DB->execute(q{SELECT FOUND_ROWS() as ROWS});
-		my $count = $sth->fetchArray;
-		$sth->finish;
+    # 全部で何件あるか調べる
+    if ($this->{dbtype} eq 'mysql') {
+        unless (defined($this->{maxrows})) {
+            my $sth   = $DB->execute(q{SELECT FOUND_ROWS() as ROWS});
+            my $count = $sth->fetchArray;
+            $sth->finish;
 
-		$this->{maxrows} = $count->[0];
-	}
+            $this->{maxrows} = $count->[0];
+        }
+    }
+    else {
+        unless (defined($this->{maxrows})) {
+            my $count_query = $query_back;
+            my $replaced    = $count_query =~ s/SELECT.+?FROM/SELECT COUNT(*) FROM/si;
+            if (!$replaced) {
+                die __PACKAGE__."#paging, failed to rewrite the SELECT statement to count total number of rows.".
+                  " (総行数を得るための SELECT 文の書換に失敗しました。)\n";
+            }
+
+            my $sth   = $DB->execute($count_query, @params);
+            my $count = $sth->fetchArray;
+            $sth->finish;
+
+            $this->{maxrows} = $count->[0];
+        }
+    }
 
 	if($this->{maxrows} == 0) {
 		# 検索結果が無かった
@@ -265,10 +299,7 @@ sub _paging {
 			# typeが1なので最大ページを現在のページに設定して再検索。
 			$this->{current} = $this->{maxpages};
 
-			# 何行目から表示すれば良いのか計算。
-			$this->{beginrow} = ($this->{current} - 1) * $this->{pagesize};
-			# LIMITを勝手に付ける。
-			$query_back .= sprintf "\nLIMIT %d, %d", $this->{beginrow}, $this->{pagesize};
+            $query_back = $this->_set_limitoffset($query_back);
 
 			if($resulttype == 0) {
 				my $sth = $DB->execute($query_back, @params);
@@ -500,8 +531,6 @@ L</pagingArray> や L</pagingHash> メソッドを利用する場合、
 Pagerオブジェクトを作成。
 DBオブジェクトを渡す。
 
-DB は MySQL のみをサポートしている。
-
 DBのグループ名を渡すこともできるが、この指定方法は今後削除される可能性がある。(obsolute)
 
 引数を指定しなかった場合、デフォルトのDBグループが使用されるが、将来はエラーに変更される可能性がある。
@@ -509,7 +538,6 @@ DBのグループ名を渡すこともできるが、この指定方法は今後
 =item setDbGroup
 
   $pager->setDbGroup($db_group)
-
 
 非推奨。DBのオブジェクトをnewPagerで渡すことを推奨する。
 使用するDBのグループ名を指定する。

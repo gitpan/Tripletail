@@ -4,7 +4,6 @@
 package Tripletail::Validator::FilterFactory;
 use strict;
 use warnings;
-use UNIVERSAL qw( isa );
 
 use Tripletail;
 

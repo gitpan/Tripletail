@@ -6,6 +6,7 @@ use Test::More tests =>
   154
   +3  # Char filter.
   +21 # MultiValues filter.
+  +9  # ExistentDay,ExistentTime,ExistentDateTime filter.
 ;
 
 use lib '.';
@@ -306,12 +307,38 @@ sub toHash {
 #---ExistentDay
   ok($validator->addFilter({
       true  => 'ExistentDay',
+      true2  => 'ExistentDay(format => "YMD")',
       false  => 'ExistentDay',
   }), 'addFilter');
-  $form->set(true => '2006-02-28', false => '2006-02-29');
+  $form->set(true => '2006-02-28', true2 => '2006-2-28', false => '2006-02-29');
   $error = $validator->check($form);
   is($error->{true}, undef, 'check');
+  is($error->{true2}, undef, 'check');
   is($error->{false}, 'ExistentDay', 'check');
+
+#---ExistentTime
+  ok($validator->addFilter({
+      true  => 'ExistentTime',
+      true2  => 'ExistentTime(format => "HMS")',
+      false  => 'ExistentTime',
+  }), 'addFilter');
+  $form->set(true => '00:00:00', true2 => '0:0:0', false => '24:00:00');
+  $error = $validator->check($form);
+  is($error->{true}, undef, 'check');
+  is($error->{true2}, undef, 'check');
+  is($error->{false}, 'ExistentTime', 'check');
+  
+#---ExistentDateTime
+  ok($validator->addFilter({
+      true  => 'ExistentDateTime',
+      true2  => "ExistentDateTime('format' => 'YMD HMS', date_delim => '/', time_delim => ':')",
+      false  => 'ExistentDateTime',
+  }), 'addFilter');
+  $form->set(true => '2006-02-28 00:00:00', true2 => '2006/2/28 0:0:0', false => '2006-02-28 24:00:00');
+  $error = $validator->check($form);
+  is($error->{true}, undef, 'check');
+  is($error->{true2}, undef, 'check');
+  is($error->{false}, 'ExistentDateTime', 'check');
 
 #---Gif
   ok($validator->addFilter({

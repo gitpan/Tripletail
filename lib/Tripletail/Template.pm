@@ -2,11 +2,11 @@
 # Tripletail::Template - テンプレートを扱う
 # -----------------------------------------------------------------------------
 package Tripletail::Template;
-use Tripletail;
 use strict;
 use warnings;
-require Tripletail::Template::Node;
-require File::Spec::Functions;
+use File::Spec::Functions;
+use Tripletail;
+use Tripletail::Template::Node;
 
 our %_REL2ABS_CACHE;
 
@@ -23,7 +23,8 @@ sub _new {
 	my $class = shift;
 	my $this = bless {} => $class;
 
-	$this->{root} = Tripletail::Template::Node->_new(undef,undef,undef,$TL->INI->get('Template' => 'allow_unexpanded_tags','false'));
+	$this->{root} = Tripletail::Template::Node->_new(
+        undef, undef, undef, $TL->INI->get(Template => allow_unexpanded_tags => 'false'));
 
 	$this->{basepath} = $TL->INI->get_reloc('Template' => 'basepath', '.');
 	if( !File::Spec::Functions::file_name_is_absolute($this->{basepath}) )
@@ -755,7 +756,7 @@ C<< <!begin:????> >>, C<< <!end:????> >> タグ前後の空白を削除する。
 
   allow_unexpanded_tags = true
 
-非推奨オプション。tureを指定した場合、
+非推奨オプション。trueを指定した場合、
 getForm, setForm, extForm, addHiddenForm, addSessionCheckを
 実行する場合に、テンプレートに未置換の <&タグ> が、
 <foo <&tag>> のように HTML タグの内部に存在していても、

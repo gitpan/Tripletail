@@ -4,7 +4,6 @@
 package Tripletail::DateTime;
 use strict;
 use warnings;
-use UNIVERSAL qw(isa);
 use Tripletail;
 use Tripletail::DateTime::JPHoliday;
 
@@ -186,6 +185,9 @@ my $re_apache_access = qr!($re_2day)/($re_month)/($re_4year):$re_hms (\S+)!;
 my $re_apache_error = qr/$re_wdy ($re_month) ($re_2day) $re_hms ($re_4year)/;
 my $re_apache_index = qr/($re_2day)-($re_month)-($re_4year) $re_hms/;
 my $re_rfc_822 = qr/$re_wdy, ($re_2day) ($re_month) (\d{2}|\d{4}) $re_hms ($re_rfc822_tz)/;
+# TODO: ↑「($re_month)」の前後の空白等は、rfc822では確かに空白だが、
+#         rfc2822ではFWSになっているので、その辺を直すべきかもしれない
+#         (しかし下手にいじると問題になるかも)
 my $re_rfc_850 = qr/$re_wdy, ($re_2day)-($re_month)-(\d{2}|\d{4}) $re_hms ($re_rfc822_tz)/;
 
 1;
@@ -215,7 +217,7 @@ sub set {
 
 	if(ref($val))
 	{
-		if( !isa($val, ref($this)) ) {
+		if( !Tripletail::_isa($val, ref($this)) ) {
 			die __PACKAGE__."#set: arg[1] is a reference. (第1引数がリファレンスです)\n";
 		}
 		$val = $val->toStr();
@@ -915,7 +917,7 @@ sub _prepare_biop
 	}
 	foreach my $val (@values)
 	{
-		if( ref($val) && isa($val, ref($this)) )
+		if( ref($val) && Tripletail::_isa($val, ref($this)) )
 		{
 			$val = $val->clone();
 		}else
@@ -1871,19 +1873,19 @@ Tripletail::DateTime オブジェクトを生成。
 
 =item B<< RFC 822 >>
 
- Wdy, DD-Mon-YY HH:MM:SS TIMEZONE
+ Wdy, DD Mon YY HH:MM:SS TIMEZONE
  (Fri, 17 Feb 06 11:24:41 +0900)
 
- Wdy, DD-Mon-YYYY HH:MM:SS TIMEZONE
+ Wdy, DD Mon YYYY HH:MM:SS TIMEZONE
  (Fri, 17 Feb 2006 11:24:41 +0900)
 
 =item B<< RFC 850 >>
 
  Wdy, DD-Mon-YY HH:MM:SS TIMEZONE
- (Fri, 17-Feb-06 11:24:41 JST)
+ (Fri, 17-Feb-06 11:24:41 +0900)
 
  Wdy, DD-Mon-YYYY HH:MM:SS TIMEZONE
- (Fri, 17-Feb-2006 11:24:41 JST)
+ (Fri, 17-Feb-2006 11:24:41 +0900)
 
 =item B<< W3C Date and Time >>
 

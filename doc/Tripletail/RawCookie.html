@@ -100,7 +100,7 @@ Tripletail::RawCookie - 汎用的なクッキー管理を行う
 
 <p>
 <span class="pod_lang">生の文字列の状態でクッキーを取り出し、また格納する。
-改行などのコントロールコードが含まれないように注意する必要性がある。 
+改行などのコントロールコードが含まれないように注意する必要性がある。
 
 </span>
 </p>
@@ -185,6 +185,19 @@ Tripletail::RawCookie - 汎用的なクッキー管理を行う
 </p>
 
 </dd>
+<dt><a id="isSecure"><span class="pod_lang"><code class="pod_iseq_C">isSecure</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  my $bool = $cookie-&gt;isSecure();</code></pre>
+
+<p>
+<span class="pod_lang">当該グループのクッキーに <a href="#secure">&quot;secure&quot;</a> 属性を与えるよう設定されているならば真を返す。
+
+</span>
+</p>
+
+</dd>
 </dl>
 
 <h2><a id="Ini_Xe3X83X91Xe3X83Xa9Xe3X83Xa1Xe3X83XbcXe3X82Xbf">
@@ -242,10 +255,9 @@ Tripletail::RawCookie - 汎用的なクッキー管理を行う
 <pre class="pod_verbatim"><code>  secure = 1</code></pre>
 
 <p>
-<span class="pod_lang">secureフラグの有無。省略可能。
-1の場合、secureフラグを付ける。
-0の場合、secureフラグを付けない。
-デフォルトは0。
+<span class="pod_lang">RFC 6265 (<a href="http://tools.ietf.org/html/rfc6265#section-4.1.2">http://tools.ietf.org/html/rfc6265#section-4.1.2</a>)
+に定義される <code class="pod_iseq_C">Secure</code> 属性を与えるかどうか。<code class="pod_iseq_C">1</code> または <code class="pod_iseq_C">0</code>
+を指定する。デフォルトは <code class="pod_iseq_C">0</code> である。
 
 </span>
 </p>
@@ -258,11 +270,9 @@ Tripletail::RawCookie - 汎用的なクッキー管理を行う
 <pre class="pod_verbatim"><code>  httponly = 1</code></pre>
 
 <p>
-<span class="pod_lang">httponlyフラグの有無。省略可能。
-1の場合、httponlyフラグを付ける。
-0の場合、httponlyフラグを付けない。
-デフォルトは0。
-現状ではIEでしか意味が無い。
+<span class="pod_lang">RFC 6265 (<a href="http://tools.ietf.org/html/rfc6265#section-4.1.2">http://tools.ietf.org/html/rfc6265#section-4.1.2</a>)
+に定義される <code class="pod_iseq_C">HttpOnly</code> 属性を与えるかどうか。<code class="pod_iseq_C">1</code> または <code class="pod_iseq_C">0</code>
+を指定する。デフォルトは <code class="pod_iseq_C">0</code> である。
 
 </span>
 </p>
@@ -371,6 +381,7 @@ Tripletail::RawCookie - 汎用的なクッキー管理を行う
 <li><a href="#expires">expires</a></li>
 <li><a href="#get">get</a></li>
 <li><a href="#httponly">httponly</a></li>
+<li><a href="#isSecure">isSecure</a></li>
 <li><a href="#path">path</a></li>
 <li><a href="#secure">secure</a></li>
 <li><a href="#set">set</a></li>

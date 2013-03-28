@@ -2,223 +2,325 @@
 # Tripletail::RawCookie - 汎用的なクッキー管理を行う
 # -----------------------------------------------------------------------------
 package Tripletail::RawCookie;
+use constant _POST_REQUEST_HOOK_PRIORITY => -4_000_000; # 順序は問わない
 use strict;
 use warnings;
 use Tripletail;
 
-sub _POST_REQUEST_HOOK_PRIORITY() { -4_000_000 } # 順序は問わない
+my %_INSTANCES; # group => Tripletail::RawCookie
 
-our $_INSTANCES = {}; # group => Tripletail::RawCookie
+# ABNF from RFC 6265:
+#
+# cookie-header = "Cookie:" OWS cookie-string OWS
+# cookie-string = cookie-pair *( ";" SP cookie-pair )
+#
+# set-cookie-header = "Set-Cookie:" SP set-cookie-string
+# set-cookie-string = cookie-pair *( ";" SP cookie-av )
+#
+# cookie-pair       = cookie-name "=" cookie-value
+# cookie-name       = token
+# cookie-value      = *cookie-octet / ( DQUOTE *cookie-octet DQUOTE )
+# cookie-octet      = %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+#                       ; US-ASCII characters excluding CTLs,
+#                       ; whitespace DQUOTE, comma, semicolon,
+#                       ; and backslash
+# token             = <token, defined in [RFC2616], Section 2.2>
+#
+# cookie-av         = expires-av / max-age-av / domain-av /
+#                     path-av / secure-av / httponly-av /
+#                     extension-av
+# expires-av        = "Expires=" sane-cookie-date
+# sane-cookie-date  = <rfc1123-date, defined in [RFC2616], Section 3.3.1>
+# max-age-av        = "Max-Age=" non-zero-digit *DIGIT
+#                       ; In practice, both expires-av and max-age-av
+#                       ; are limited to dates representable by the
+#                       ; user agent.
+# non-zero-digit    = %x31-39
+#                       ; digits 1 through 9
+# domain-av         = "Domain=" domain-value
+# domain-value      = <subdomain>
+#                       ; defined in [RFC1034], Section 3.5, as
+#                       ; enhanced by [RFC1123], Section 2.1
+# path-av           = "Path=" path-value
+# path-value        = <any CHAR except CTLs or ";">
+# secure-av         = "Secure"
+# httponly-av       = "HttpOnly"
+# extension-av      = <any CHAR except CTLs or ";">
+my $re_token        = qr/[^\x00-\x20()<>@,;:\\"\/[\]?={}]+/;
+my $re_cookie_octet = qr/[^\x00-\x20\",;\\]/;
+my $re_path_value   = qr/[^\x00-\x1F;]*/;
+my $re_domain_value = qr{ [A-Za-z0-9]+ (?:-[A-Za-z0-9]+)*
+                          (?:
+                              \.[A-Za-z0-9]+ (?:-[A-Za-z0-9]+)*
+                          )*
+                        }x;
 
 1;
 
 sub _getInstance {
-	my $class = shift;
-	my $group = shift;
+    my $class = shift;
+    my $group = shift;
 
-	if(!defined($group)) {
-		$group = 'Cookie';
-	}
+    if (!defined $group) {
+        $group = 'Cookie';
+    }
 
-	my $obj = $_INSTANCES->{$group};
-	if($obj) {
-		return $obj;
-	}
+    if (my $obj = $_INSTANCES{$group}) {
+        return $obj;
+    }
 
-	$obj = $_INSTANCES->{$group} = $class->__new($group);
+    my $obj = $_INSTANCES{$group} = $class->__new($group);
 
-	# postRequestフックに、保存されているインスタンスを削除する関数を
-	# インストールする。そうしなければFCGIモードで過去のリクエストのクッキーが
-	# いつまでも残る。
-	$TL->setHook(
-		'postRequest',
-		_POST_REQUEST_HOOK_PRIORITY,
-		sub {
-			if(%$_INSTANCES) {
-				%$_INSTANCES = ();
-				#$TL->log('Tripletail::RawCookie' => 'Deleted a cookie object created in this request.');
-			}
-		},
-	);
+    # postRequestフックに、保存されているインスタンスを削除する関数を
+    # インストールする。そうしなければFCGIモードで過去のリクエストのクッキーが
+    # いつまでも残る。
+    $TL->setHook(
+        'postRequest',
+        _POST_REQUEST_HOOK_PRIORITY,
+        sub {
+            %_INSTANCES = ();
+        });
 
-	$obj;
+    return $obj;
+}
+
+use fields qw(group hasLoaded gotCookies setCookies
+              expires path domain secure httpOnly);
+sub __new {
+    my Tripletail::RawCookie $this  = shift;
+    my                       $group = shift;
+
+    if (!ref $this) {
+        $this = fields::new($this);
+    }
+
+    $this->{group     } = $group;
+    $this->{hasLoaded } = undef;  # 環境変数からロードした後は真。
+    $this->{gotCookies} = {};     # キー => 値 (飽くまでキャッシュ。{setCookies}が優先される。)
+    $this->{setCookies} = {};     # キー => 値 (undefの値はクッキーの削除)
+    $this->{expires   } = $TL->INI->get($group => expires  => undef);
+    $this->{path      } = $TL->INI->get($group => path     => undef);
+    $this->{domain    } = $TL->INI->get($group => domain   => undef);
+    $this->{secure    } = $TL->INI->get($group => secure   => undef);
+    $this->{httpOnly  } = $TL->INI->get($group => httpOnly => undef);
+
+    if (defined($this->{path})
+          && $this->{path} !~ m/\A$re_path_value\z/) {
+        die "Malformed cookie path: $this->{path}";
+    }
+    elsif (defined($this->{domain})
+             && $this->{domain} !~ m/\A$re_domain_value\z/) {
+        die "Malformed cookie domain: $this->{domain}";
+    }
+
+    return $this;
 }
 
 sub get {
-	my $this = shift;
-	my $name = shift;
+    my Tripletail::RawCookie $this = shift;
+    my                       $name = shift;
 
-	if(!defined($name)) {
-		die __PACKAGE__."#get: arg[1] is not defined. (第1引数が指定されていません)\n";
-	} elsif(ref($name)) {
-		die __PACKAGE__."#get: arg[1] is a reference. (第1引数がリファレンスです)\n";
-	}
+    if (!defined $name) {
+        die __PACKAGE__."#get: arg[1] is not defined. (第1引数が指定されていません)\n";
+    }
+    elsif (ref $name) {
+        die __PACKAGE__."#get: arg[1] is a reference. (第1引数がリファレンスです)\n";
+    }
+    elsif ($name !~ m/\A$re_token\z/o) {
+        die __PACKAGE__."#get: arg[1] contains some forbidden symbols.\n";
+    }
 
-	if(my $data = $this->{set_cookies}{$name}) {
-		# setまたはdeleteされている。
-		return $data;
-	}
+    if (exists $this->{setCookies}{$name}) {
+        # setまたはdeleteされている。
+        if (defined(my $value = $this->{setCookies}{$name})) {
+            return $value;
+        }
+        else {
+            return;
+        }
+    }
+    else {
+        $this->__readEnvIfNeeded;
 
-	$this->__readEnvIfNeeded;
-
-	$this->{got_cookies}{$name};
+        if (defined(my $value = $this->{gotCookies}{$name})) {
+            return $value;
+        }
+        else {
+            return;
+        }
+    }
 }
 
 sub set {
-	my $this = shift;
-	my $name = shift;
-	my $value = shift;
+    my Tripletail::RawCookie $this  = shift;
+    my                       $name  = shift;
+    my                       $value = shift;
 
-	if(!defined($name)) {
-		die __PACKAGE__."#set: arg[1] is not defined. (第1引数が指定されていません)\n";
-	} elsif(ref($name)) {
-		die __PACKAGE__."#set: arg[1] is a reference. (第1引数がリファレンスです)\n";
-	}
+    if (!defined $name) {
+        die __PACKAGE__."#set: arg[1] is not defined. (第1引数が指定されていません)\n";
+    }
+    elsif (ref $name) {
+        die __PACKAGE__."#set: arg[1] is a reference. (第1引数がリファレンスです)\n";
+    }
+    elsif ($name !~ m/\A$re_token\z/o) {
+        die __PACKAGE__."#set: arg[1] contains some forbidden symbols.\n";
+    }
 
-	if(ref($value)) {
-		die __PACKAGE__."#set: arg[2] is a reference. (第2引数がリファレンスです)\n";
-	}
+    if (!defined $value) {
+        die __PACKAGE__."#set: arg[2] is not defined. (第2引数が指定されていません)\n";
+    }
+    elsif (ref $value) {
+        die __PACKAGE__."#set: arg[2] is a reference. (第2引数がリファレンスです)\n";
+    }
+    elsif ($name !~ m/\A$re_cookie_octet*\z/) {
+        die __PACKAGE__."#set: arg[2] contains some forbidden symbols.\n";
+    }
 
-	$this->{set_cookies}{$name} = $value;
-	$this;
+    $this->{setCookies}{$name} = $value;
+    return $this;
 }
 
 sub delete {
-	my $this = shift;
-	my $name = shift;
+    my Tripletail::RawCookie $this = shift;
+    my                       $name = shift;
 
-	if(!defined($name)) {
-		die __PACKAGE__."#delete: arg[1] is not defined. (第1引数が指定されていません)\n";
-	} elsif(ref($name)) {
-		die __PACKAGE__."#delete: arg[1] is a reference. (第1引数がリファレンスです)\n";
-	}
+    if (!defined $name) {
+        die __PACKAGE__."#delete: arg[1] is not defined. (第1引数が指定されていません)\n";
+    }
+    elsif (ref $name) {
+        die __PACKAGE__."#delete: arg[1] is a reference. (第1引数がリファレンスです)\n";
+    }
+    elsif ($name !~ m/\A$re_token\z/o) {
+        die __PACKAGE__."#set: arg[1] contains some forbidden symbols.\n";
+    }
 
-	$this->{set_cookies}{$name} = undef;
-	$this;
+    if (exists $this->{gotCookies}{$name}) {
+        # We deliberately replace it with undef to emit Set-Cookie
+        # header that promptly expires it.
+        $this->{setCookies}{$name} = undef;
+    }
+    else {
+        delete $this->{setCookies}{$name};
+    }
+
+    return $this;
 }
 
 sub clear {
-	my $this = shift;
+    my Tripletail::RawCookie $this = shift;
 
-	$this->__readEnvIfNeeded;
+    $this->__readEnvIfNeeded;
 
-	foreach my $key (keys %{$this->{got_cookies}},keys %{$this->{set_cookies}}) {
-		$this->{set_cookies}{$key} = undef;
-	}
+    # We deliberately replace every value with undef to emit
+    # Set-Cookie headers that promptly expires them.
+    my @keys = (keys %{$this->{gotCookies}}, keys %{$this->{setCookies}});
+    foreach my $key (@keys) {
+        $this->{setCookies}{$key} = undef;
+    }
 
-	$this;
+    return $this;
+}
+
+sub isSecure {
+    my Tripletail::RawCookie $this = shift;
+
+    if ($this->{secure}) {
+        return 1;
+    }
+    else {
+        return;
+    }
 }
 
 sub _makeSetCookies {
-	# Set-Cookie:の値として使えるようにクッキーを文字列化するクラスメソッド。
-	# 結果は配列で返される。
-	my $class = shift;
-	my @result;
-
-	foreach my $this (values %$_INSTANCES) {
-		push @result, $this->__makeSetCookie;
-	}
-
-	@result;
-}
-
-sub _isSecure {
-	my $this = shift;
-	$TL->INI->get($this->{group} => 'secure');
-}
-
-sub __new {
-	my $class = shift;
-	my $group = shift;
-	my $this = bless {} => $class;
-
-	$this->{group} = $group;
-	$this->{read} = undef; # 環境変数からロードした後は真。
-	$this->{got_cookies} = {}; # キー => 値 (飽くまでキャッシュ。{set_cookies}が優先される。)
-	$this->{set_cookies} = {}; # キー => 値 (undefの値はクッキーの削除)
-
-	$this;
+    # Set-Cookie:の値として使えるようにクッキーを文字列化するクラスメソッド。
+    # 結果は配列で返される。
+    return map { $_->__makeSetCookie } values %_INSTANCES;
 }
 
 sub __readEnvIfNeeded {
-	# $ENV{HTTP_COOKIE}を読む。
-	my $this = shift;
+    my Tripletail::RawCookie $this = shift;
 
-	if($this->{read}) {
-		return $this;
-	}
+    if ($this->{hasLoaded}) {
+        return $this;
+    }
 
-	if(my $cookie = $ENV{HTTP_COOKIE}) {
-		$cookie =~ tr/\x0a\x0d//d;
+    if (my $cookie = $ENV{HTTP_COOKIE}) {
+        foreach my $pair (split /; /, $cookie) {
+            if ($pair =~ m/\A(.+?)=($re_cookie_octet*)\z/so) {
+                $this->{gotCookies}{$1} = $2;
+            }
+            elsif ($pair =~ m/\A(.+?)="($re_cookie_octet*)"\z/so) {
+                $this->{gotCookies}{$1} = $2;
+            }
+        }
+    }
 
-		my $str;
-		foreach my $pair (split /;/, $cookie) {
-			$pair =~ s/ //g;
-
-			my ($key, $value) = split /=/, $pair;
-			$this->{got_cookies}{$key} = $value;
-		}
-	}
-
-	$this->{read} = 1;
-	$this;
+    $this->{hasLoaded} = 1;
+    return $this;
 }
 
 sub __cookieTime {
-	my $this = shift;
-	my $epoch = shift;
+    my Tripletail::RawCookie $this  = shift;
+    my                       $epoch = shift;
 
-	local $[ = 0;
+    my @DoW = qw(Sunday Monday Tuesday Wednesday Thursday Friday Saturday);
+    my @MoY = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
 
-	my @DoW = qw(Sunday Monday Tuesday Wednesday Thursday Friday Saturday);
-	my @MoY = qw(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec);
+    my ($sec, $min, $hour, $mday, $mon, $year, $wday) = gmtime $epoch;
+    $year += 1900;
 
-	my ($sec, $min, $hour, $mday, $mon, $year, $wday) = gmtime $epoch;
-	$year += 1900;
-
-	sprintf '%s, %02d-%s-%04d %02d:%02d:%02d GMT',
-		$DoW[$wday], $mday, $MoY[$mon], $year, $hour, $min, $sec;
+    # '$[': The index of the first element in an array, and of the
+    #       first character in a substring.
+    return sprintf(
+        '%s, %02d-%s-%04d %02d:%02d:%02d GMT',
+        $DoW[$[+$wday], $mday, $MoY[$[+$mon], $year, $hour, $min, $sec);
 }
 
 sub __makeSetCookie {
-	my $this = shift;
-	my @result;
+    my Tripletail::RawCookie $this = shift;
+    my @result;
 
-	while(my ($key, $value) = each %{$this->{set_cookies}}) {
-		my @parts;
-		push @parts, sprintf('%s=%s', $key, defined $value ? $value : '');
+    while (my ($key, $value) = each %{$this->{setCookies}}) {
+        my @parts;
+        push @parts, sprintf('%s=%s', $key, defined $value ? $value : '');
 
-		if(defined($value)) {
-			if(defined(my $expires = $TL->INI->get($this->{group} => 'expires'))) {
-				push @parts, "expires=".$this->__cookieTime(
-					time + $TL->parsePeriod($expires));
-			}
-		} else {
-			push @parts, "expires=".$this->__cookieTime(0);
-		}
+        if (defined $value) {
+            if (defined $this->{expires}) {
+                push @parts,
+                  'expires='.$this->__cookieTime(
+                                 time + $TL->parsePeriod($this->{expires}));
+            }
+        }
+        else {
+            # Expire it immediately.
+            push @parts, "expires=".$this->__cookieTime(0);
+        }
 
-		if(defined(my $path = $TL->INI->get($this->{group} => 'path'))) {
-			push @parts, "path=$path";
-		}
-		if(defined(my $domain = $TL->INI->get($this->{group} => 'domain'))) {
-			push @parts, "domain=$domain";
-		}
-		if($TL->INI->get($this->{group} => 'secure')) {
-			push @parts, 'secure';
-		}
-		if($TL->INI->get($this->{group} => 'httponly')) {
-			push @parts, 'httponly';
-		}
+        if (defined $this->{path}) {
+            push @parts, "path=$this->{path}";
+        }
+        if (defined $this->{domain}) {
+            push @parts, "domain=$this->{domain}";
+        }
+        if ($this->{secure}) {
+            push @parts, 'secure';
+        }
+        if ($this->{httpOnly}) {
+            push @parts, 'httponly';
+        }
 
-		my $line = join '; ', @parts;
-		if(length($line) > 1024 * 4) {
-			die __PACKAGE__."#_makeSetCookies: the cookie became too large. Decrease its content. [$line] (クッキーが大きくなりすぎました。保存するデータを減らしてください)";
-		}
+        my $line = join '; ', @parts;
+        if (length($line) > 1024 * 4) {
+            die __PACKAGE__."#_makeSetCookies: the cookie became too large. ".
+              "Decrease its content. [$line] (クッキーが大きくなりすぎました。".
+                "保存するデータを減らしてください)";
+        }
 
-		push @result, $line;
-	}
+        push @result, $line;
+    }
 
-	@result;
+    @result;
 }
 
 
@@ -240,7 +342,7 @@ Tripletail::RawCookie - 汎用的なクッキー管理を行う
 =head1 DESCRIPTION
 
 生の文字列の状態でクッキーを取り出し、また格納する。
-改行などのコントロールコードが含まれないように注意する必要性がある。 
+改行などのコントロールコードが含まれないように注意する必要性がある。
 
 クッキー有効期限、ドメイン、パス等は、 L<ini|Tripletail::Ini> ファイルで指定する。
 
@@ -281,6 +383,12 @@ Tripletail::RawCookie オブジェクトを取得。
 
 全てのクッキーを削除する。
 
+=item C<< isSecure >>
+
+  my $bool = $cookie->isSecure();
+
+当該グループのクッキーに L</"secure"> 属性を与えるよう設定されているならば真を返す。
+
 =back
 
 
@@ -313,20 +421,17 @@ Tripletail::RawCookie オブジェクトを取得。
 
   secure = 1
 
-secureフラグの有無。省略可能。
-1の場合、secureフラグを付ける。
-0の場合、secureフラグを付けない。
-デフォルトは0。
+RFC 6265 (L<http://tools.ietf.org/html/rfc6265#section-4.1.2>)
+に定義される C<Secure> 属性を与えるかどうか。C<1> または C<0>
+を指定する。デフォルトは C<0> である。
 
 =item httponly
 
   httponly = 1
 
-httponlyフラグの有無。省略可能。
-1の場合、httponlyフラグを付ける。
-0の場合、httponlyフラグを付けない。
-デフォルトは0。
-現状ではIEでしか意味が無い。
+RFC 6265 (L<http://tools.ietf.org/html/rfc6265#section-4.1.2>)
+に定義される C<HttpOnly> 属性を与えるかどうか。C<1> または C<0>
+を指定する。デフォルトは C<0> である。
 
 =back
 

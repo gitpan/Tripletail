@@ -1,21 +1,9 @@
-use Test::More tests => 99;
-use Test::Exception;
+#!perl
 use strict;
 use warnings;
-
-BEGIN {
-    open my $fh, '>', "tmp$$.ini";
-    print $fh q{
-[TL]
-trap = none
-};
-    close $fh;
-    eval q{use Tripletail "tmp$$.ini"};
-}
-
-END {
-    unlink "tmp$$.ini";
-}
+use Test::More tests => 99;
+use Test::Exception;
+use Tripletail '/dev/null';
 
 ok($TL->INI, 'INI');
 is($TL->CGI, undef, 'CGI');
@@ -143,14 +131,17 @@ is($TL->parseQuantity('1p'), 1000 * 1000 * 1000 * 1000 * 1000, 'parseQuantity');
 is($TL->parseQuantity('1e'), 1000 * 1000 * 1000 * 1000 * 1000 * 1000, 'parseQuantity');
 is($TL->parseQuantity('100ki 10k'), 100 * 1024 + 10 * 1000, 'parseQuantity');
 
-dies_ok {$TL->readFile} 'readFile die';
-dies_ok {$TL->readFile(\123)} 'readFile die';
-ok($TL->readFile("tmp$$.ini"), 'readFile');
-ok($TL->readTextFile("tmp$$.ini"), 'readTextFile');
-
 dies_ok {$TL->writeFile} 'writeFile die';
 dies_ok {$TL->writeFile(\123)} 'writeFile die';
-ok($TL->writeFile("tmp2$$.ini",'test'), 'writeFile');
-dies_ok {$TL->writeTextFile("tmp2$$.ini",'aa',1,\123)} 'writeTextFile die';
-ok($TL->writeTextFile("tmp2$$.ini",'aa'), 'writeTextFile');
-    unlink "tmp2$$.ini";
+ok($TL->writeFile("tmp.$$",'test'), 'writeFile');
+dies_ok {$TL->writeTextFile("tmp.$$",'aa',1,\123)} 'writeTextFile die';
+ok($TL->writeTextFile("tmp.$$",'aa'), 'writeTextFile');
+
+dies_ok {$TL->readFile} 'readFile die';
+dies_ok {$TL->readFile(\123)} 'readFile die';
+ok($TL->readFile("tmp.$$"), 'readFile');
+ok($TL->readTextFile("tmp.$$"), 'readTextFile');
+
+END {
+    unlink "tmp.$$";
+}

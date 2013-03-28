@@ -5,8 +5,7 @@ package Tripletail::Filter::MemCached;
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::Filter;
-our @ISA = qw(Tripletail::Filter);
+use base 'Tripletail::Filter';
 
 # このフィルタは必ず最後に呼び出されなければならない。
 # オプション一覧:

@@ -2,12 +2,10 @@
 # Tripletail::Sendmail::Sendmail - Sendmailメール送信
 # -----------------------------------------------------------------------------
 package Tripletail::Sendmail::Sendmail;
+use base 'Tripletail::Sendmail';
 use strict;
 use warnings;
 use Tripletail;
-use IO::Socket::INET;
-require Tripletail::Sendmail;
-our @ISA = qw(Tripletail::Sendmail);
 
 1;
 

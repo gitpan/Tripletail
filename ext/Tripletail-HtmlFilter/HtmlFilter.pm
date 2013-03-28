@@ -453,10 +453,11 @@ sub _parse_pp {
     (s/^\s*(\/?\w+)//) and ($this->[NAME] = $1);
 
     while(1) {
-		(s/([\w:\-]+)\s*=\s*"([^\"]*)"//)   ? ($this->attr($1 => $2)) :
-		  (s/([\w:\-]+)\s*=\s*([^\s\>]+)//) ? ($this->attr($1 => $2)) :
-			(s~(\w+|/)~~)                   ? ($this->end($1)) :
-			  last;
+        (s/([\w:\-]+)\s*=\s*"([^"]*)"//)     ? ($this->attr($1 => $2)) :
+          (s/([\w:\-]+)\s*=\s*'([^']*)'//)   ? ($this->attr($1 => $2)) :
+            (s/([\w:\-]+)\s*=\s*([^\s>]+)//) ? ($this->attr($1 => $2)) :
+              (s~(\w+|/)~~)                  ? ($this->end($1)) :
+                last;
     }
 
     $this;
@@ -542,17 +543,19 @@ sub end {
 sub toStr {
     my $this = shift;
     my $str = '<' . $this->[NAME];
-    
-	foreach my $attr (@{$this->[ATTRS]})
-	{
-	   $str .= qq{ $attr->[0]="$attr->[1]"};
-	}
-	
+
+    foreach my $attr (@{$this->[ATTRS]}) {
+        my $key   = $attr->[0];
+        my $value = $attr->[1];
+        $value =~ s/"/&quot;/g;
+        $str .= sprintf(qq{ %s="%s"}, $key, $value);
+    }
+
     if( defined $this->[TAIL] and length $this->[TAIL] )
 	{
 		$str .= ' ' . $this->[TAIL];
     }
-	
+
     $str .= '>';
 }
 

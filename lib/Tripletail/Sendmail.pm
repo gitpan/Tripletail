@@ -15,10 +15,7 @@ sub _new {
 	$group = defined $group ? $group : 'Sendmail';
 
 	# iniのmethodパラメータに応じて実際のクラスのインスタンスを作る。
-	my $method = $TL->INI->get($group => 'method');
-	if(!defined($method)) {
-		$method = 'smtp';
-	}
+	my $method = $TL->INI->get($group => method => 'smtp');
 
 	if($method eq 'smtp') {
 		require Tripletail::Sendmail::Smtp;

@@ -5,8 +5,7 @@ package Tripletail::Filter::HeaderOnly;
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::Filter;
-our @ISA = qw(Tripletail::Filter);
+use base 'Tripletail::Filter::Cookie';
 
 # オプション一覧:
 
@@ -21,10 +20,10 @@ sub _new {
 
 sub print {
 	my $this = shift;
-	
+
 	'';
 }
-  
+
 sub flush {
 	my $this = shift;
 

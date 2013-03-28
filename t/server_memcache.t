@@ -1,48 +1,54 @@
+#!perl
 use strict;
 use warnings;
+use Crypt::CBC;
+use Crypt::Rijndael;
+use Data::Dumper;
+use LWP::UserAgent;
 use Test::More;
 use Test::Exception;
-use Config;
-use Data::Dumper;
 
 our $HTTP_PORT = 8967;
 
-if(!$ENV{TL_MEMCACHE_CHECK}){
-   plan skip_all => "skipping tests for Tripletail::MemCached for \$ENV{TL_MEMCACHE_CHECK} being false.";
+if (!$ENV{TL_MEMCACHE_CHECK}) {
+    plan skip_all => "skipping tests for Tripletail::MemCached for \$ENV{TL_MEMCACHE_CHECK} being false.";
 }
 
-eval "use Cache::Memcached";
+eval {
+    require Cache::Memcached;
+};
 if ($@) {
     plan skip_all => "skipping tests for Tripletail::MemCached for Cache::Memcached being unavailable.";
 }
 
-eval "use POE";
-if ($@) {
-    plan skip_all => "POE is required for various tests using http server...";
-}
-
-eval "use POE::Component::Server::HTTP";
+eval {
+    require POE;
+    require POE::Component::Server::HTTP;
+};
 if ($@) {
     plan skip_all => "PoCo::Server::HTTP is required for various tests using http server...";
 }
 
-eval q{
-    use LWP::UserAgent;
-    use HTTP::Status;
-    use HTTP::Message;
-    use HTTP::Cookies;
-    use URI::QueryParam;
+eval {
+    require HTTP::Cookies;
 };
 if ($@) {
-    plan skip_all => "LWP required for various tests using http server...";
+    return "HTTP::Cookies is required for these tests...";
 }
 
-eval q{
-    use Crypt::CBC;
-    use Crypt::Rijndael;
+eval {
+    require HTTP::Status;
+    import HTTP::Status;
 };
 if ($@) {
-    plan skip_all => "Crypt::CBC and Crypt::Rijndael are required for these tests...";
+    return "HTTP::Status is required for these tests...";
+}
+
+eval {
+    require URI::QueryParam;
+};
+if ($@) {
+    return "URI::QueryParam is required for these tests...";
 }
 
 eval {
@@ -89,16 +95,17 @@ sub start_server () {
 		my $ini;
 		my $stdin;
 		my $env;
-	
+
 		POE::Component::Server::HTTP->new(
 			Port => $HTTP_PORT,
 			ContentHandler => {
 				'/' => sub {
 					my ($req, $resp) = @_;
 
-					my $script = "use Tripletail qw(tmp$$.ini);\n" . $script;
+					my $inifile = -d 't' ? "t/tmp$$.ini" : "tmp$$.ini";
+					my $script  = "use Tripletail qw($inifile);\n" . $script;
 					do {
-						open my $fh, '>', "tmp$$.ini";
+						open my $fh, '>', $inifile;
 						if ($ini) {
 							print $fh $ini;
 						}
@@ -112,16 +119,16 @@ sub start_server () {
 					if (fork) {
 						close $c_write;
 						close $c_read;
-			
+
 						if (defined $stdin) {
 							print $p_write $stdin;
 						}
 						close $p_write;
-			
+
 						while (defined($_ = <$p_read>)) {
 							$received_data .= $_;
 						}
-			
+
 						wait;
 					} else {
 						close $p_read;
@@ -151,12 +158,12 @@ sub start_server () {
 						} else {
 							delete $ENV{HTTP_COOKIE};
 						}
-			
+
 						eval $script;
 						exit;
 					}
 
-					unlink "tmp$$.ini";
+					unlink $inifile;
 
 					# 結果をパースしてhttpdへ渡す。
 
@@ -169,7 +176,7 @@ sub start_server () {
 						$resp->headers->header(
 							$key => $msg->headers->header($key));
 					}
-		    
+
 					$resp->content($msg->content);
 					return $retval;
 				},

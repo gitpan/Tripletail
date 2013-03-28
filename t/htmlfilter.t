@@ -1,3 +1,4 @@
+# -*- perl -*-
 use Test::More tests => 13;
 use strict;
 use warnings;
@@ -14,6 +15,7 @@ my $src = qq{
 <FORM>
   aaa<br>
   bbb
+  <small class='la"r"ge'>ccc</small>
 </FORM>
 <!-- <comment> -->
 };
@@ -22,13 +24,14 @@ my $dst = qq{
 <FORM action="foo.cgi"><small>FORM</small>
   aaa<!-- BR -->
   bbb
+  <small class="la&quot;r&quot;ge">ccc</small>
 </FORM>
 <!-- MODIFIED COMMENT: [<comment>] -->
 };
 
 my $filter;
 ok($filter = $TL->newHtmlFilter(
-    interest       => [qr/f.rm/i, 'br'],
+    interest       => [qr/f.rm/i, 'br', 'small'],
     filter_comment => 1,
    ), 'newHtmlFilter');
 

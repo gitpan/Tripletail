@@ -3,23 +3,23 @@
 # -----------------------------------------------------------------------------
 # $Id$
 package Tripletail;
-use 5.008_000;
 use strict;
 use warnings;
 BEGIN{ our $_CHKNONLAZY=$ENV{PERL_DL_NONLAZY} }
 BEGIN{ our $_CHKDYNALDR=$INC{'DynaLoader.pm'} }
-use UNIVERSAL qw(isa);
 use File::Spec;
 use Data::Dumper;
+use List::MoreUtils qw(any);
 use POSIX qw(:errno_h);
+use Scalar::Util qw(blessed);
 use Cwd ();
 
-our $VERSION = '0.49';
+our $VERSION = '0.50';
 our $XS_VERSION = $VERSION;
-$VERSION = eval $VERSION;
+$VERSION = CORE::eval $VERSION;
 
 our $TL = Tripletail->__new;
-our @specialization = ();
+our @specialization;
 our $LOG_SERIAL = 0;
 our $LASTERROR;
 our %_FILE_CACHE;
@@ -33,21 +33,41 @@ our $FCGI_LOADMSG_WIN32;
 # 他のパッケージからも参照されるので削除してはならない。
 our $IN_EXTENT_OF_STARTCGI;
 
-require Unicode::Japanese;
-
-if($ENV{TL_COVER_TEST_MODE}) {
-	require Devel::Cover;
-	Devel::Cover->import(qw(-silent on -summary off -db ./cover_db -coverage statement branch condition path subroutine time +ignore ^/));
+if ($ENV{TL_COVER_TEST_MODE}) {
+    CORE::eval {
+        require Devel::Cover;
+        Devel::Cover->import(
+            -silent   => 'on',
+            -summary  => 'off',
+            -db       => './cover_db',
+            -coverage => (
+                'statement', 'branch', 'condition', 'path', 'subroutine', 'time'
+               ),
+            '+ignore' => '^/'
+           );
+    };
+    if ($@) {
+        die "Failed to load Devel::Cover: $@";
+    }
 }
 
 *errorTrap = \&_errorTrap_is_deprecated;
 sub _errorTrap_is_deprecated {
-	die "\$TL->errorTrap(..) is deprecated, use \$TL->trapEror(..)"
+    die "\$TL->errorTrap(..) is deprecated, use \$TL->trapEror(..)"
 }
 
-if( $ENV{MOD_PERL} )
-{
-	&PreloadModperl;
+if ($ENV{MOD_PERL}) {
+    CORE::eval {
+        require Apache2::RequestRec;
+        require Apache2::RequestIO;
+        require Apache2::RequestUtil;
+        require Apache2::Const;
+        Apache2::Const->import(-compile => qw(OK));
+    };
+    if ($@) {
+        local $SIG{__DIE__} = 'DEFAULT';
+        die "Failed to load modules to work with mod_perl: $@";
+    }
 }
 
 1;
@@ -56,61 +76,63 @@ if( $ENV{MOD_PERL} )
 # ロード時初期化
 # -----------------------------------------------------------------------------
 sub import {
-	my $package = shift;
-	my $callpkg1 = (caller(0))[0];
-	local($SIG{__WARN__}) = sub { warn "warn-import: $_[0]\n" };
-	no strict qw(refs);
-	*{"$callpkg1\::TL"} = *{"Tripletail\::TL"};
+    my $class  = shift;
+    my $caller = (caller(0))[0];
 
-	if(!$TL->{INI}) {
-		my $inifile = shift;
-		if(!defined($inifile)) {
-			_inside_pod_coverage()
-				or die "use Tripletail: ini file isn't defined. Usage: \"use Tripletail qw(config.ini);\" (use Tripletail の際にiniファイルの指定が必要です)\n";
-			$inifile = '/dev/null';
-		}
-		if( $inifile ne '/dev/null' && $inifile ne 'nul' )
-		{
-			$TL->{INI} = $TL->newIni($inifile);
-		}else
-		{
-			$TL->{INI} = $TL->newIni();
-		}
-		$TL->{INI}->const;
-		
-		if(defined($_[0])) {
-			@specialization = @_;
-		}
+    no strict qw(refs);
+    *{"${caller}::TL"} = *{"Tripletail::TL"};
 
-		my $trap = $TL->{INI}->get(TL => 'trap', 'die');
-		if($trap ne 'none' && $trap ne 'die' && $trap ne 'diewithprint') {
-			die __PACKAGE__."#import: invalid trap option [$trap] (trapオプションの指定が正しくありません).\n";
-		}
+    if (defined $TL->{INI}) {
+        if (exists $_[0]) {
+            die "use Tripletail: ini file has been already loaded." .
+              " (iniファイルを指定した use Tripletail は一度しか行えません)\n";
+        }
+    }
+    else {
+        my $ini_file = do {
+            if (exists $_[0]) {
+                $_[0];
+            }
+            else {
+                if (_is_in_pod_coverage() || _is_in_b_perlreq()) {
+                    File::Spec->devnull();
+                }
+                else {
+                    die "Usage: \"use Tripletail qw(config.ini);\"".
+                      " (use Tripletail の際にiniファイルの指定が必要です)\n";
+                }
+            }
+        };
 
+        if ($ini_file eq File::Spec->devnull()) {
+            $TL->{INI} = $TL->newIni();
+        }
+        else {
+            $TL->{INI} = $TL->newIni($ini_file);
+        }
+        $TL->{INI}->const;
 
-		$TL->{trap} = $trap;
+        if (defined($_[0])) {
+            @specialization = @_;
+        }
 
-		if($trap =~ /^(die|diewithprint)$/ )
-		{
-			my $trap = $1;
-			$SIG{__DIE__} = \&__die_handler_for_startup;
-		}
-		*{"$callpkg1\::CGI"} = _gensym(); # dummy symbol to avoid the false alarm by strict.pm.
-	} else {
-		if(defined($_[0])) {
-			die "use Tripletail: ini file has been already loaded. (iniファイルを指定した use Tripletail は一度しか行えません)";
-		}
-	}
-}
+        $TL->{trap} = $TL->{INI}->get(TL => trap => 'die');
+        if (!any { $TL->{trap} eq $_ } qw(none die diewithprint)) {
+            die __PACKAGE__."#import: unknown trap mode [$TL->{trap}]".
+              " (trapオプションの指定が正しくありません).\n";
+        }
 
-sub PreloadModperl
-{
-	require Apache2::RequestRec;
-	require Apache2::RequestIO;
-	require Apache2::RequestUtil;
-	require Apache2::Const;
-	Apache2::Const->import(-compile => qw(OK REDIRECT));
-	require APR::Table;
+        if (any { $TL->{trap} eq $_ } qw(die diewithprint)) {
+            $SIG{__DIE__} = \&__die_handler_for_startup;
+        }
+
+        # dummy symbol to avoid the false alarm by strict.pm.
+        *{"${caller}::CGI"} = _gensym();
+    }
+    # preload some modules.
+    # (workaround for "BEGIN not safe after errors--compilation aborted", perldiag)
+    require Tripletail::Error;
+    require Tripletail::Debug;
 }
 
 sub __die_handler_for_startup
@@ -118,7 +140,7 @@ sub __die_handler_for_startup
 	my $msg = shift;
 	my $trap = shift || $TL->{trap};
 
-	if( isa($msg, 'Tripletail::Error') )
+	if( _isa($msg, 'Tripletail::Error') )
 	{
 		die $msg;
 	}
@@ -144,7 +166,7 @@ sub __die_handler_for_startup
 		# でも Status: 500 は ErrorDocument 500 に反応しなくなるようなので,
 		# 一応compatも入れておく.
 		$err->{message} = "Internal Error has occured. To display details, you should set [TL] trap=diewithprint on ini file. (内部エラーが発生しました. 詳細を表示するには ini ファイルに [TL] trap=diewithprint の設定を加えてください)";
-		if( !$TL->INI->get(TL=>'compat_no_trap_for_cgi_internal_error') )
+		if( !$TL->INI->get(TL => compat_no_trap_for_cgi_internal_error => 0) )
 		{
 			$TL->__dispError($err);
 		}
@@ -154,19 +176,30 @@ sub __die_handler_for_startup
 }
 
 # -----------------------------------------------------------------------------
-# Pod::Coverage内からロードされているかの判定.
-#  (Test::Pod::Cover用)
+# Pod::Coverage 内からロードされているかの判定.
+#  (Test::Pod::Cover 用)
 # -----------------------------------------------------------------------------
-sub _inside_pod_coverage
-{
-	$INC{"Pod/Coverage.pm"} or return; # false.
-	my $i = 0;
-	my $in_pod_coverage = 0;
-	while(my $pkg = caller(++$i))
-	{
-		$pkg eq 'Pod::Coverage' and return 1;
-	}
-	return; # false.
+sub _is_in_pod_coverage {
+    if (exists $INC{"Pod/Coverage.pm"}) {
+        my $i = 0;
+        while (my $pkg = caller(++$i)) {
+            return 1 if $pkg eq 'Pod::Coverage';
+        }
+    }
+    return;
+}
+
+# -----------------------------------------------------------------------------
+# B::PerlReq 内からロードされているかの判定.
+#  (Test::Dependencies 用)
+# -----------------------------------------------------------------------------
+sub _is_in_b_perlreq {
+    if (exists $INC{"B/PerlReq.pm"}) {
+        return 1;
+    }
+    else {
+        return;
+    }
 }
 
 # -----------------------------------------------------------------------------
@@ -240,13 +273,13 @@ sub fork {
     }
 
     my $pid = CORE::fork();
-    
+
     if (not defined $pid) {
         die "TL#fork: failed: $!";
     }
     elsif ($pid == 0) {
         # child
-        
+
         if ($this->{fcgi_request}) {
             # 何故か FCGI::DESTROY を殺して置かないと、子プロセスの方が早く死んだ
             # 時に Internal Server Error になってしまう。Detach しているのだから
@@ -255,7 +288,7 @@ sub fork {
             # http://wiki.dreamhost.com/Perl_FastCGI
             *FCGI::DESTROY = sub {};
         }
-        
+
         require Tripletail::DB;
 
         Tripletail::DB::_reconnectSilentlyAll();
@@ -473,7 +506,7 @@ sub __die_handler_for_localeval
 	# それ以外の事はしない。
 	my $msg = shift;
 
-	die isa($msg, 'Tripletail::Error') ? $msg : $TL->newError(error => $msg);
+	die _isa($msg, 'Tripletail::Error') ? $msg : $TL->newError(error => $msg);
 }
 
 sub startCgi {
@@ -536,7 +569,7 @@ sub startCgi {
 			# FCGIモード
 
 			my $maxrequestcount = $this->INI->get(TL => 'maxrequestcount', 0);
-            if ($this->INI->get(TL => 'fcgilog')) {
+            if ($this->INI->get(TL => 'fcgilog' => 0)) {
                 $this->log(FCGI => 'Starting FCGI Loop... maxrequestcount: ' . $maxrequestcount);
             }
 			my $requestcount = 0;
@@ -553,7 +586,7 @@ sub startCgi {
 			my $exit_requested;
 			my $handling_request;
 			local $SIG{USR1} = sub {
-                if ($this->INI->get(TL => 'fcgilog')) {
+                if ($this->INI->get(TL => 'fcgilog' => 0)) {
                     $this->log("SIGUSR1 received");
                 }
 				$exit_requested = 1;
@@ -564,7 +597,7 @@ sub startCgi {
 				#     状況に応じて挙動を変更する(以下を参照)
 				# http://d.tir.jp/pw?mod_fastcgi の一番下
 				# https://192.168.0.17/mantis/view.php?id=1037
-                if ($this->INI->get(TL => 'fcgilog')) {
+                if ($this->INI->get(TL => 'fcgilog' => 0)) {
                     $this->log("SIGTERM received");
                 }
 				$exit_requested = 1;
@@ -594,7 +627,7 @@ sub startCgi {
 				};
 				if($@) {
 					if($exit_requested) {
-                        if ($this->INI->get(TL => 'fcgilog')) {
+                        if ($this->INI->get(TL => 'fcgilog' => 0)) {
                             $this->log(FCGI => "FCGI_request->Accept() got interrupted : $@");
                         }
 						$this->{fcgi_request}->Finish();
@@ -643,12 +676,12 @@ sub startCgi {
 			}
             $this->{fcgi_request} = undef;
 
-            if ($this->INI->get(TL => 'fcgilog')) {
+            if ($this->INI->get(TL => 'fcgilog' => 0)) {
                 $this->log(FCGI => "FCGI Loop is terminated ($requestcount reqs processed).");
             }
 		} else {
 			# CGIモード
-            if ($this->INI->get(TL => 'fcgilog')) {
+            if ($this->INI->get(TL => 'fcgilog' => 0)) {
                 $this->log(TL => 'CGI mode');
             }
 			
@@ -671,7 +704,7 @@ sub startCgi {
 			die $err;
 		}
 
-		if (isa($err, 'Tripletail::Error') and $err->type eq 'error') {
+		if (_isa($err, 'Tripletail::Error') and $err->type eq 'error') {
 			$err->message(
 				"Died outside the `-main':\n" . $err->message);
 		}
@@ -695,7 +728,7 @@ sub _update_processname
 	my $this = shift;
 	my $command = shift;
 	
-	if($this->INI->get(TL => 'command_add_processname', '1'))
+	if($this->INI->get(TL => command_add_processname => 1))
 	{
 	#	my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
 	#	my $timestr = sprintf('%02d:%02d:%02d', $mon + 1, $mday, $hour, $min, $sec);
@@ -714,7 +747,7 @@ sub _call_fault_handler
 	my $printed;
 	FAULT_HANDLER:
 	{
-		my $handler_name = $this->INI->get(TL => 'fault_handler');
+		my $handler_name = $this->INI->get(TL => 'fault_handler' => undef);
 		$handler_name or last FAULT_HANDLER;
 		
 		my ($modname, $subname) = $handler_name =~ /^(?:::)?(?:(\w+(?:::\w+)*)::)?(\w+)$/;
@@ -825,7 +858,7 @@ sub trapError {
 			$this->_sendErrorIfNeeded($err);
 			print STDERR $err;
 			
-			my $errorlog = $this->INI->get(TL => 'errorlog', 1);
+			my $errorlog = $this->INI->get(TL => errorlog => 1);
 			if($errorlog > 0) {
 				$this->log(__PACKAGE__, "$err");
 			}
@@ -879,7 +912,7 @@ sub dispatch {
 	}
 
 	my $args = $param->{args} || [];
-	if( !UNIVERSAL::isa($args, 'ARRAY') )
+	if( !_isa($args, 'ARRAY') )
 	{
 		die __PACKAGE__."#dispatch： arg{args} is not array-ref. (args 引数がarray-refではありません)\n";
 	}
@@ -913,7 +946,7 @@ sub log {
 
     my $stringify = sub {
         my $val = shift;
-        
+
         if (ref $val) {
             Data::Dumper->new([$val])
               ->Indent(1)->Purity(0)->Useqq(1)->Terse(1)->Deepcopy(1)
@@ -923,7 +956,7 @@ sub log {
             $val; # 元々スカラーだった
         }
     };
-    
+
     if (@_ == 1) {
         # "呼出し元ファイル名(行数):関数名"
         my ($filename, $line) = (caller 0)[1, 2];
@@ -941,19 +974,19 @@ sub log {
         die "TL#log: invalid call of \$TL->log(). (引数の数が正しくありません)\n";
     }
 
-	if(!defined($group)) {
-		die "TL#log: arg[1] is not defined. (第1引数が指定されていません)\n";
-	}
-	if(!defined($message)) {
-		die "TL#log: arg[2] is not defined. (第2引数が指定されていません)\n";
-	}
+    if(!defined($group)) {
+        die "TL#log: arg[1] is not defined. (第1引数が指定されていません)\n";
+    }
+    if(!defined($message)) {
+        die "TL#log: arg[2] is not defined. (第2引数が指定されていません)\n";
+    }
 
-	$this->getDebug->_tlLog(
-		group => $group,
-		log   => $message,
-	);
+    $this->getDebug->_tlLog(
+        group => $group,
+        log   => $message,
+    );
 
-	$this->_log($group, $message);
+    $this->_log($group, $message);
 }
 
 sub _log {
@@ -978,7 +1011,7 @@ sub _log {
 		. "\n" . $log . "\n";
 
 	if(!exists($this->{logdir})) {
-		$this->{logdir} = $this->INI->get_reloc(TL => 'logdir');
+		$this->{logdir} = $this->INI->get_reloc(TL => 'logdir' => undef);
 		if( defined($this->{logdir}) )
 		{
 			# trust TL.logdir parameter.
@@ -1055,6 +1088,10 @@ sub _log {
 		};
 	}
 
+	if( utf8::is_utf8($log) )
+	{
+		utf8::encode($log);
+	}
 	my $fh = $this->{cacheLogFh};
 	flock($fh, 2);
 	seek($fh, 0, 2);
@@ -1277,7 +1314,7 @@ sub _sendErrorIfNeeded {
     my $this = shift;
     my $err = shift;
     
-    isa($err, 'Tripletail::Error') or
+    _isa($err, 'Tripletail::Error') or
       $err = $TL->newError('error' => $err);
 
     my $emtype = $this->INI->get(TL => 'errormailtype', 'error memory-leak');
@@ -1313,9 +1350,8 @@ sub sendError {
 	my $this = shift;
 	my $opts = { @_ };
 
-	my $email;
 	my ($rcpt, $group);
-	if($email = $this->INI->get(TL => 'errormail')) {
+	if (defined(my $email = $this->INI->get(TL => 'errormail' => undef))) {
 		if($email =~ m/^(.+?)%(.+)$/) {
 			$rcpt = $1;
 			$group = $2;
@@ -1692,12 +1728,39 @@ sub newSendmail {
 	Tripletail::Sendmail->_new(@_);
 }
 
+sub newSerializer {
+    my $this = shift;
+    my %opts = exists $_[0] ? %{+shift} : ();
+
+    if (!exists $opts{-type} || $opts{-type} eq 'modern') {
+        require Tripletail::Serializer;
+        return Tripletail::Serializer->_new(@_);
+    }
+    elsif ($opts{-type} eq 'compat') {
+        require Tripletail::Serializer::Compat;
+        return Tripletail::Serializer::Compat->_new(@_);
+    }
+    elsif ($opts{-type} eq 'legacy') {
+        require Tripletail::Serializer::Legacy;
+        return Tripletail::Serializer::Legacy->_new(@_);
+    }
+    else {
+        die "Unknown serializer type: $opts{-type}";
+    }
+}
+
 sub newSMIME {
-	my $this = shift;
+    my $this = shift;
 
-	require Crypt::SMIME;
-
-	Crypt::SMIME->new(@_);
+    CORE::eval {
+        require Crypt::SMIME;
+    };
+    if ($@) {
+        die __PACKAGE__."#newSMIME: Crypt::SMIME is not available";
+    }
+    else {
+        return Crypt::SMIME->new(@_);
+    }
 }
 
 sub newTagCheck {
@@ -1709,17 +1772,11 @@ sub newTagCheck {
 }
 
 sub newTemplate {
-	my $this = shift;
-	
-	my $err;
-	{
-		local($@);
-		CORE::eval{ require Tripletail::Template; };
-		$err = $@;
-	}
-	$err and die $err;
+    my $this = shift;
 
-	Tripletail::Template->_new(@_);
+    require Tripletail::Template;
+
+    return Tripletail::Template->_new(@_);
 }
 
 sub getSession {
@@ -1759,6 +1816,12 @@ sub newError {
 		};
 		if ($@) {
 			print STDERR $@;
+			if( $@ =~ /BEGIN not safe after errors--compilation aborted/ )
+			{
+				print STDERR "--\nsee: perldoc perldiag\n> BEGIN not safe after errors--compilation aborted\n";
+			}
+			my ($type, $msg, ) = @_;
+			print STDERR "--\n[$type]\n$msg";
 			exit 1;
 		}
 	}
@@ -2182,7 +2245,7 @@ sub _getRunMode
 {
 	my $this = shift;
 
-	if( UNIVERSAL::isa(tied(*STDIN), "FCGI::Stream") )
+	if( _isa(tied(*STDIN), "FCGI::Stream") )
 	{
 		# already in fcgi-request.
 		return 'FCGI';
@@ -2304,7 +2367,7 @@ sub __dispError {
 	my $this = shift;
 	my $err  = shift;
 
-	isa($err, 'Tripletail::Error') or
+	_isa($err, 'Tripletail::Error') or
 	  $err = $TL->newError('error' => $err);
 
 	my $errortemplate = $TL->INI->get(TL => 'errortemplate', '');
@@ -2366,7 +2429,7 @@ sub __executeCgi {
 		die $@ if not (
 			ref($@)
 				and
-			UNIVERSAL::isa($@, "Tripletail::Error")
+			_isa($@, "Tripletail::Error")
 				and
 			(
 				($@->message =~ /we got IO error while reading from stdin/)
@@ -2379,7 +2442,7 @@ sub __executeCgi {
 	}
 	else {
 		$this->{CGI} = $this->{CGIORIG}->clone;
-		if( !$TL->INI->get(TL => 'allow_mutable_input_cgi_object') )
+		if( !$TL->INI->get(TL => 'allow_mutable_input_cgi_object' => 0) )
 		{
 			$this->{CGI}->const();
 		}
@@ -2507,6 +2570,24 @@ sub _secure_env
 	};
 }
 
+sub _isa
+{
+	my $val  = shift;
+	my $type = shift;
+	defined($type) or die 'undefined arg:type';
+	defined($val)  or return; # false.
+	if( defined(ref($val)) )
+	{
+		return ref($val) eq $type || (blessed($val) && $val->isa($type));
+	}else
+	{
+		local($@);
+		local($SIG{__DIE__}) = 'DEFAULT';
+		my $ret = eval { $val->isa($type); };
+		$@ and print STDERR __PACKAGE__."._isa: $@";
+		$ret;
+	}
+}
 
 __END__
 
@@ -3211,6 +3292,10 @@ L<Tripletail::RawCookie> オブジェクトを取得。
 =head4 C<< newSendmail >>
 
 L<Tripletail::Sendmail> オブジェクトを作成。
+
+=head4 C<< newSerializer >>
+
+L<Tripletail::Serializer> オブジェクトを作成。
 
 =head4 C<< newSMIME >>
 

@@ -546,7 +546,7 @@ sub getFileName {
 	}
 
 	my $filename = $this->{filename}{$key};
-	if( defined($filename) && !$TL->INI->get(TL=>'compat_form_getfilename_returns_fullpath') )
+	if( defined($filename) && !$TL->INI->get(TL => compat_form_getfilename_returns_fullpath => 0) )
 	{
 		$filename =~ s{.*[/\\]}{};
 	}
@@ -782,7 +782,7 @@ sub haveSessionCheck {
 	my $sessiongroup = shift;
 	my $issecure = shift;
 
-	if( ref($sessiongroup) && UNIVERSAL::isa($sessiongroup, 'Tripletail::Session') )
+	if( ref($sessiongroup) && Tripletail::_isa($sessiongroup, 'Tripletail::Session') )
 	{
 		$sessiongroup = $sessiongroup->{group};
 	}
@@ -807,119 +807,8 @@ sub haveSessionCheck {
 	}
 }
 
-sub _freeze {
-	my $this = shift;
-
-	$this->_h2s($this->{form});
-}
-
-sub _thaw {
-	my $this = shift;
-	my $frozen = shift;
-
-	$this->{form} = $this->_s2h($frozen);
-	$this;
-}
-
-# ハッシュ<->文字列
-
-sub _h2s {
-	my $this = shift;
-	my $hash = shift;
-
-	my $str = '';
-	foreach my $key (keys %$hash) {
-		next if(!defined($key));
-		my $data;
-		if(ref($hash->{$key}) eq 'HASH') {
-			$data = $this->_h2s($hash->{$key});
-		} elsif(ref($hash->{$key}) eq 'ARRAY') {
-			$data = $this->_a2s($hash->{$key});
-		} elsif(defined($hash->{$key})) {
-			$data = unpack('H*', $hash->{$key});
-		} else {
-			$data = '';
-		}
-		$str .= 'h' . unpack('H*', $key) . 'r' . unpack('H*', $data);
-	}
-
-	return $str;
-
-}
-
-sub _s2h{
-	my $this = shift;
-	my $str = shift;
-
-	my $hash = {};
-	my @node = split(/h/, $str);
-	shift(@node);
-	foreach my $node (@node) {
-		my ($key, $data) = split(/r/, $node, 2);
-		$key = pack('H*', $key);
-		$data = pack('H*', $data);
-		if($data =~ m/^h/) {
-			$data = $this->_s2h($data);
-		} elsif($data =~ m/^y/) {
-			$data = $this->_s2a($data);
-		} elsif(defined($data)) {
-			$data = pack('H*', $data);
-		} else {
-			$data = '';
-		}
-		$hash->{$key} = $data;
-	}
-
-	return $hash;
-
-}
-
-sub _a2s {
-	my $this = shift;
-	my $array = shift;
-
-	my $str = '';
-	foreach my $key (@$array) {
-		next if(!defined($key));
-		my $data;
-		if(ref($key) eq 'HASH') {
-			$data = $this->_h2s($key);
-		} elsif(ref($key) eq 'ARRAY') {
-			$data = $this->_a2s($key);
-		} elsif(defined($key)) {
-			$data = unpack('H*', $key);
-		} else {
-			$data = '';
-		}
-		$str .= 'y' . unpack('H*', $data);
-	}
-
-	$str;
-
-}
-
-sub _s2a {
-	my $this = shift;
-	my $str = shift;
-
-	my $array = [];
-	my @node = split(/y/, $str);
-	shift(@node);
-	foreach my $node (@node) {
-		my $data = pack('H*', $node);
-		if($data =~ m/^h/) {
-			$data = $this->_s2h($data);
-		} elsif($data =~ m/^y/) {
-			$data = $this->_s2a($data);
-		} elsif(defined($data)) {
-			$data = pack('H*', $data);
-		} else {
-			$data = '';
-		}
-		push(@$array, $data);
-	}
-
-	$array;
+sub toHash {
+    return shift->{form};
 }
 
 
@@ -935,7 +824,7 @@ Tripletail::Form - フォーム情報
 
   my $form = $TL->newForm;
   $form->set(Command => 'DoDispList');
-  
+
   $TL->location(
       $form->toLink('foo.cgi'));
   # Location: http://....../foo.cgi?Command=DoDispList
@@ -1072,7 +961,7 @@ $keyが存在しなくてもエラーとはならない。
 
 アップロードキーが存在すれば1を、そうでなければundefを返す。
 ファイルが実際にアップロードされたかどうかに関わらず, キーの存在だけを
-判断します. 
+判断します.
 
 =item isUploaded
 
@@ -1185,6 +1074,13 @@ $codeで文字コードを指定すると、文字コードを変換してから
 
 フラグメントが存在する場合は、それが #xxx の形でURLの中に組み込まれる。
 
+=item toHash
+
+    my $hash = $form->toHash();
+    # $hash is like {a => 1, b => [2, 20]}
+
+フォームデータを HASH ref の形式で返す。
+
 =item haveSessionCheck
 
   $result = $form->haveSessionCheck($sessiongroup)
@@ -1224,4 +1120,3 @@ HP : http://tripletail.jp/
 =back
 
 =cut
-

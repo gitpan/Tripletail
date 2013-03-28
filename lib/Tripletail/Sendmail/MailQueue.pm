@@ -2,12 +2,12 @@
 # Tripletail::Sendmail::MailQueue - 独自のメールキューを使用するメール送信
 # -----------------------------------------------------------------------------
 package Tripletail::Sendmail::MailQueue;
+use base 'Tripletail::Sendmail';
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::Sendmail;
-require Tripletail::Sendmail::Smtp;
-our @ISA = qw(Tripletail::Sendmail);
+use Tripletail::Sendmail::Smtp;
+use Unicode::Japanese ();
 
 our $QUEUE_ID_COUNT = 0;
 
@@ -20,21 +20,19 @@ sub _new {
 
 	local($_);
 
-    if (my $queuedir = $TL->INI->get($group => 'queuedir')) {
+    $this->{queuedir} = do {
+        my $queuedir = $TL->INI->get($group => 'queuedir');
         $queuedir =~ s!/+$!!; # 末尾の / を消す
-        $this->{queuedir} = $queuedir;
-    }
-    else {
-        die __PACKAGE__."#new: queuedir is not defined for the INI group [$group]. (queuedirが指定されていません)\n";
-    }
-    
+        $queuedir;
+    };
+
 	$this->{group} = $group;
 	$this->{smtp} = Tripletail::Sendmail::Smtp->_new($group);
-	$this->{erroraddr} = $TL->INI->get($group => 'erroraddr');
-	$this->{errorlog} = $TL->INI->get($group => 'errorlog');
+	$this->{erroraddr} = $TL->INI->get($group => 'erroraddr' => undef);
+	$this->{errorlog} = $TL->INI->get($group => 'errorlog' => undef);
 	$this->{host} = $TL->INI->get($group => 'host');
 
-	if(defined($_ = $TL->INI->get($group => 'timeout'))) {
+	if(defined($_ = $TL->INI->get($group => 'timeout' => undef))) {
 		$this->{smtp}->setTimeout($_);
 	}
 

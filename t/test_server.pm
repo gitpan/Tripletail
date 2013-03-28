@@ -10,7 +10,10 @@
 package t::test_server;
 use strict;
 use warnings;
+use Crypt::CBC;
+use Crypt::Rijndael;
 use Data::Dumper;
+use LWP::UserAgent;
 
 our $HTTP_PORT = 8967;
 our $SERVER_PID;
@@ -24,7 +27,7 @@ END
 	if( $SERVER_PID )
 	{
 		&stop_server;
-		
+
 		foreach my $sub (reverse @cleanup)
 		{
 			$sub->();
@@ -48,53 +51,54 @@ sub add_cleanup
 #  returns message for skip_all.
 #  or '' on all green.
 #
-sub check_requires()
-{
-	local($SIG{__DIE__}) = 'DEFAULT';
-	eval "use POE";
-	if ($@) {
-		return "POE required for various tests using http server...";
-	}
+sub check_requires() {
+    local($SIG{__DIE__}) = 'DEFAULT';
 
-	eval "use POE::Component::Server::HTTP";
-	if ($@) {
-		return "PoCo::Server::HTTP required for various tests using http server...";
-	}
+    eval {
+        require POE;
+        require POE::Component::Server::HTTP;
+    };
+    if ($@) {
+        return "PoCo::Server::HTTP is required for these tests...";
+    }
 
-	eval q{
-		use LWP::UserAgent;
-		use HTTP::Status;
-		use HTTP::Message;
-		use HTTP::Cookies;
-		use URI::QueryParam;
-	};
-	if ($@) {
-		return "LWP required for various tests using http server...";
-	}
+    eval {
+        require HTTP::Cookies;
+    };
+    if ($@) {
+        return "HTTP::Cookies is required for these tests...";
+    }
 
-	eval q{
-		use Crypt::CBC;
-		use Crypt::Rijndael;
-	};
-	if ($@) {
-		return "Crypt::CBC and Crypt::Rijndael are required for these tests...";
-	}
+    eval {
+        require HTTP::Status;
+        import HTTP::Status;
+    };
+    if ($@) {
+        return "HTTP::Status is required for these tests...";
+    }
 
-	eval {
-		use IO::Socket::INET;
-		my $sock = IO::Socket::INET->new(
-				LocalPort => $HTTP_PORT,
-				Proto => 'tcp',
-				Listen => 1,
-				ReuseAddr => 1,
-				);
-		$sock or die;
-	};
-	if ($@) {
-		return "port $HTTP_PORT/tcp required not to be in use for these tests...";
-	}
-	
-	'';
+    eval {
+        require URI::QueryParam;
+    };
+    if ($@) {
+        return "URI::QueryParam is required for these tests...";
+    }
+
+    eval {
+        use IO::Socket::INET;
+        my $sock = IO::Socket::INET->new(
+            LocalPort => $HTTP_PORT,
+            Proto => 'tcp',
+            Listen => 1,
+            ReuseAddr => 1,
+           );
+        $sock or die;
+    };
+    if ($@) {
+        return "port $HTTP_PORT/tcp required not to be in use for these tests...";
+    }
+
+    return;
 }
 
 # -----------------------------------------------------------------------------
@@ -193,7 +197,7 @@ sub _prepare_script
 }
 
 # -----------------------------------------------------------------------------
-# / ハンドラ. 
+# / ハンドラ.
 # /installで設定した擬似CGIを実行する.
 #
 sub _run_script
@@ -201,17 +205,18 @@ sub _run_script
 	my $heap = shift;
 	my $req  = shift;
 	my $resp = shift;
-	
-	my $script = "use Tripletail qw(tmp$$.ini);\n" . $heap->{script};
+
+	my $inifile = -d 't' ? "t/tmp$$.ini" : "tmp$$.ini";
+	my $script  = "use Tripletail qw($inifile);\n" . $heap->{script};
 	do {
-		open my $fh, '>', "tmp$$.ini";
+		open my $fh, '>', $inifile;
 		if ($heap->{ini}) {
 			print $fh $heap->{ini};
 		}
 	};
 
 	# その子プロセスでスクリプトをevalする。
-	
+
 	pipe my $p_read, my $c_write;
 	pipe my $c_read, my $p_write;
 	my $received_data = '';
@@ -223,59 +228,59 @@ sub _run_script
 			print $p_write $heap->{stdin};
 		}
 		close $p_write;
-		
+
 		while (defined($_ = <$p_read>)) {
 			$received_data .= $_;
 		}
-		
+
 		wait;
 	} else {
 		# child.
 		close $p_read;
 		close $p_write;
-		
+
 		open STDIN,  '<&' . fileno $c_read;
 		open STDOUT, '>&' . fileno $c_write;
-		
+
 		if ($heap->{env}) {
 			while (my ($key, $val) = each %{$heap->{env}}) {
 				$ENV{$key} = $val;
 			}
 		}
-		
+
 		$ENV{REQUEST_URI} = '/';
 		$ENV{SERVER_NAME} = 'localhost';
 		$ENV{REQUEST_METHOD} = $req->method;
 		$ENV{CONTENT_TYPE} = defined $req->header('Content-Type') ?
 			$req->header('Content-Type') : 'application/x-www-form-urlencoded';
 		$ENV{CONTENT_LENGTH} = defined $heap->{stdin} ? length($heap->{stdin}) : 0;
-		
+
 		if ($_ = $req->header('Cookie')) {
 			$ENV{HTTP_COOKIE} = $_;
 		} else {
 			delete $ENV{HTTP_COOKIE};
 		}
-		
+
 		eval $script;
 		$@ and print "Status: 599\r\nX-Internal-Error: 1\r\n\r\n$@";
 		exit;
 	}
-	
-	unlink "tmp$$.ini";
-	
+
+	unlink $inifile;
+
 	# 結果をHTTPからパースしてhttpdへ渡す。
 
 	my $msg = HTTP::Message->parse($received_data);
 	my $retval = do {
-        my $st = $msg->headers->header('Status');
-        if (defined $st) {
-            $st =~ m/^(\d+)/;
-            $1;
-        }
-        else {
-            200;
-        }
-    };
+		my $st = $msg->headers->header('Status');
+		if (defined $st) {
+			$st =~ m/^(\d+)/;
+			$1;
+		}
+		else {
+			200;
+		}
+	};
 	$resp->code($retval);
 	$resp->message(status_message($resp->code));
 
@@ -292,7 +297,7 @@ sub _run_script
 				$key => $msg->headers->header($key));
 		}
 	}
-	
+
 	$resp->content($msg->content);
 	return $retval;
 }

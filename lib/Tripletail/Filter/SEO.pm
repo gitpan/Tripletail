@@ -5,8 +5,7 @@ package Tripletail::Filter::SEO;
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::Filter;
-our @ISA = qw(Tripletail::Filter);
+use base 'Tripletail::Filter';
 
 # このフィルタはリンクのQUERY_STRINGを次のようにPATH_INFOに変換する。
 #

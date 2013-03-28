@@ -1,17 +1,13 @@
+#!perl
+use strict;
+use warnings;
+use File::Spec ();
+use Test::Exception;
 use Test::More tests =>
   +122
   +10 # getFileName returns basename.
   ;
-use Test::Exception;
-use strict;
-use warnings;
-
-BEGIN {
-    eval q{use Tripletail qw(/dev/null)};
-}
-
-END {
-}
+use Tripletail '/dev/null';
 
 my $f;
 dies_ok {$TL->newForm(undef)} 'newForm undef';
@@ -100,7 +96,7 @@ $c->addForm($TL->newForm(bbb => 222));
 ok($c->add(bbb => 111), 'add');
 ok($c->remove(bbb => 111), 'remove');
 ok($c->delete('ccc'), 'delete');
-open my $fh, '<', "tmp$$.ini";
+open my $fh, '<', File::Spec->devnull();
 ok($c->setFile('filename',$fh), 'setFile');
 ok($c->setFile('filename',undef), 'setFile');
 close $fh;

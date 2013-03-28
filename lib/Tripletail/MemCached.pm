@@ -14,7 +14,7 @@ sub _new {
 
 	my @servers;
 
-	$this->{servers} = $TL->INI->get('MemCached' => 'servers');
+	$this->{servers} = $TL->INI->get('MemCached' => servers => undef);
 	if(!defined($this->{servers})) {
 		push(@servers,'localhost:11211');
 	} else {

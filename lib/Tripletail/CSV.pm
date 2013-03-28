@@ -4,6 +4,8 @@
 package Tripletail::CSV;
 use strict;
 use warnings;
+use IO::Handle ();
+use IO::Scalar ();
 
 my $_INSTANCE;
 
@@ -31,8 +33,6 @@ sub _new {
 		die __PACKAGE__."#new: Text::CSV_XS is unavailable. (Text::CSV_XSが使用できません)\n";
 	}
 
-	require IO::Handle;
-
 	$this->{csv} = Text::CSV_XS->new({
 		binary => 1,
 	});
@@ -49,7 +49,6 @@ sub parseCsv {
 		$fh = $src;
 	}
 	else {
-		require IO::Scalar;
 		$fh = IO::Scalar->new(\$src);
 	}
 

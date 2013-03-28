@@ -35,4 +35,3 @@ sub test
   is($@, '', "addHiddenForm works.");
   is($tmpl->toStr, qq{<form><input type="hidden" name="a" value="1"></form>}, "result of it");
 }
-

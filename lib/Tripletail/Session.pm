@@ -4,7 +4,9 @@
 package Tripletail::Session;
 use strict;
 use warnings;
+use Digest::SHA qw(hmac_sha1_hex);
 use Tripletail;
+use Hash::Util qw(lock_hash);
 
 sub _POST_REQUEST_HOOK_PRIORITY() { -2_000_000 } # 順序は問わない
 
@@ -31,6 +33,13 @@ sub _POST_REQUEST_HOOK_PRIORITY() { -2_000_000 } # 順序は問わない
 #     Tripletail::Sessionが有効になっているなら、$TL->getSession->_setSessionDataする。
 
 our %_instance;
+
+my %BACKEND_OF = (
+    mysql  => 'Tripletail::Session::MySQL',
+    pgsql  => 'Tripletail::Session::PgSQL',
+    sqlite => 'Tripletail::Session::SQLite',
+   );
+lock_hash(%BACKEND_OF);
 
 1;
 
@@ -59,7 +68,13 @@ sub discard {
 	my $this = shift;
 
 	if(defined($this->{sid})) {
-		$this->__removeSid($this->{sid});
+        $this->_deleteSid($this->{sid});
+
+        if ($TL->INI->get($this->{group} => 'logging', '0')) {
+            $TL->log(__PACKAGE__,
+                     "Removed the session ID [$this->{sid}] on the DB".
+                       " [$this->{dbgroup}][$this->{sessiontable}].");
+        }
 	}
 	$this->__reset;
 
@@ -83,7 +98,7 @@ sub setValue {
 		if(defined($this->{sid})) {
 			$this->{data} = $value;
 			$this->{updatetime} = 0; # アップデートを行わせる
-			$this->__updateSession;
+			$this->_updateSession;
 		} else {
 			$this->{data} = $value;
 			$this->get;
@@ -121,220 +136,53 @@ sub _createSid {
 	$this->{checkvalssl} = '_' x 18;
 	$this->{checkvalssl} =~ s/_/int(rand(10))/eg;
 
-	$this->{sid} = $this->__createSid($this->{checkval}, $this->{checkvalssl}, $this->{data});
+	$this->{sid} = $this->_insertSid($this->{checkval}, $this->{checkvalssl}, $this->{data});
+
+    if ($TL->INI->get($this->{group} => 'logging', '0')) {
+        $TL->log(__PACKAGE__,
+                 "created new session sid [$this->{sid}] on the DB".
+                   " [$this->{dbgroup}][$this->{sessiontable}].");
+    }
 }
 
-sub __createSid {
-	my $this = shift;
-	my $checkval = shift;
-	my $checkvalssl = shift;
-	my $data = shift;
+sub _insertSid {
+    my $this        = shift;
+    my $checkval    = shift;
+    my $checkvalssl = shift;
+    my $data        = shift;
 
-	my $sid;
+    my $DB   = $TL->getDB($this->{dbgroup});
+    my $type = $DB->getType;
 
-	my $DB = $TL->getDB($this->{dbgroup});
-
-	my $type = $DB->getType;
-	if($type eq 'mysql') {
-		eval {
-			$DB->execute(\$this->{dbset} => qq{
-				REPLACE INTO $this->{sessiontable}
-					VALUES (NULL, ?, ?, ?, now())
-			}, $checkval, $checkvalssl, $data);
-			$sid = $DB->getLastInsertId(\$this->{dbset});
-		};
-		if($@) {
-			die __PACKAGE__."#__createSid: DB error. [$@]\n";
-		}
-	}elsif($type eq 'pgsql') {
-		eval {
-			$DB->execute(\$this->{dbset} => qq{
-				INSERT INTO $this->{sessiontable}
-				       (checkval, checkvalssl, data, updatetime)
-				VALUES (?, ?, ?, NOW())
-			}, $checkval, $checkvalssl, $data );
-			$sid = $DB->getLastInsertId(\$this->{dbset},"$this->{sessiontable}_sid_seq");
-		};
-		if($@) {
-			die __PACKAGE__."#__createSid: DB error. [$@]\n";
-		}
-	}elsif($type eq 'sqlite') {
-		eval {
-			$DB->execute(\$this->{dbset} => qq{
-				REPLACE INTO $this->{sessiontable}
-					VALUES (NULL, ?, ?, ?, CURRENT_TIMESTAMP)
-			}, $checkval, $checkvalssl, $data);
-			$sid = $DB->getLastInsertId(\$this->{dbset});
-		};
-		if($@) {
-			die __PACKAGE__."#__createSid: DB error. [$@]\n";
-		}
-	} else {
-		die __PACKAGE__."#__createSid: the type of DB [$this->{dbgroup}] is [$type], which is not supported.".
-			" (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
-	}
-
-	if($sid) {
-		if($TL->INI->get($this->{group} => 'logging', '0')) {
-			$TL->log(__PACKAGE__, "created new session sid [$sid] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-		}
-	} else {
-		die __PACKAGE__."#__createSid: failed to create a session ID. (セッションIDが作成できませんでした)\n";
-	}
-
-	$sid;
+    die __PACKAGE__."#__createSid: the type of DB [$this->{dbgroup}] is [$type], which is not supported.".
+      " (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
 }
 
-sub __removeSid {
-	my $this = shift;
-	my $sid = shift;
+sub _deleteSid {
+    my $this = shift;
+    my $sid  = shift;
 
-	my $DB = $TL->getDB($this->{dbgroup});
+    my $DB   = $TL->getDB($this->{dbgroup});
+    my $type = $DB->getType;
 
-	my $type = $DB->getType;
-	if($type eq 'mysql') {
-		eval {
-			$DB->execute(\$this->{dbset} => qq{
-				DELETE FROM $this->{sessiontable}
-					WHERE sid = ?
-			}, $sid);
-		};
-		if($@) {
-			die __PACKAGE__."#__removeSid: DB error. [$@]\n";
-		}
-	}elsif($type eq 'pgsql') {
-		eval {
-			$DB->execute(\$this->{dbset} => qq{
-				DELETE FROM $this->{sessiontable}
-					WHERE sid = ?
-			}, $sid);
-		};
-		if($@) {
-			die __PACKAGE__."#__removeSid: DB error. [$@]\n";
-		}
-	}elsif($type eq 'sqlite') {
-		eval {
-			$DB->execute(\$this->{dbset} => qq{
-				UPDATE $this->{sessiontable}
-				   SET checkval = 'x',
-				       checkvalssl = 'x',
-				       data = null,
-				       updatetime = CURRENT_TIME
-					WHERE sid = ?
-			}, $sid);
-		};
-		if($@) {
-			die __PACKAGE__."#__removeSid: DB error. [$@]\n";
-		}
-	} else {
-		die __PACKAGE__."#__removeSid: the type of DB [$this->{dbgroup}] is [$type], which is not supported by the Tripletail::Session.".
-			" (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
-	}
+    $DB->execute(
+        \$this->{dbset},
+        sprintf(
+            q{DELETE FROM %s WHERE sid = ?},
+            $DB->symquote($this->{sessiontable}, $this->{dbset})),
+        $sid);
 
-	if($TL->INI->get($this->{group} => 'logging', '0')) {
-		$TL->log(__PACKAGE__, "Removed the session ID [$sid] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-	}
-	
-	$sid;
+    return $this;
 }
 
-sub __prepareSessionTable {
-	my $this = shift;
+sub _createSessionTable {
+    my $this = shift;
 
-	my $DB = $TL->getDB($this->{dbgroup});
+    my $DB   = $TL->getDB($this->{dbgroup});
+    my $type = $DB->getType;
 
-	eval {
-		$DB->execute(\$this->{readdbset} => qq{SELECT * FROM $this->{sessiontable} LIMIT 0});
-	};
-	if($@) {
-		# テーブルが無いので作る。
-		my $type = $DB->getType;
-		if($type eq 'mysql') {
-			my $typeoption = $TL->INI->get($this->{group} => 'mysqlsessiontabletype', '');
-			$typeoption = " TYPE = " . $typeoption if($typeoption);
-			eval {
-				$DB->execute(\$this->{dbset} => qq{
-					CREATE TABLE $this->{sessiontable} (
-						sid           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-						checkval      BIGINT UNSIGNED NOT NULL,
-						checkvalssl   BIGINT UNSIGNED NOT NULL,
-						data          BIGINT UNSIGNED,
-						updatetime    TIMESTAMP NOT NULL,
-						PRIMARY KEY (sid),
-						INDEX (updatetime)
-					) AUTO_INCREMENT = 4294967296
-					AVG_ROW_LENGTH = 20
-					MAX_ROWS = 300000000
-					$typeoption
-				});
-			};
-			if($@) {
-				die __PACKAGE__."#__prepareSessionTable: DB error. [$@]\n";
-			}
-		}elsif($type eq 'pgsql') {
-			# PostgreSQL: 9223372036854775807. (64bit/signed)
-			eval {
-				$DB->execute(\$this->{dbset} => qq{
-					CREATE TABLE $this->{sessiontable} (
-						sid           bigserial NOT NULL,
-						checkval      bigint NOT NULL,
-						checkvalssl   bigint NOT NULL,
-						data          bigint,
-						updatetime    TIMESTAMP NOT NULL,
-						PRIMARY KEY (sid)
-					)
-				});
-			};
-			if($@) {
-				die __PACKAGE__."#__prepareSessionTable,]: DB error. [$@]\n";
-			}
-			eval {
-				$DB->execute(\$this->{dbset} => qq{
-					CREATE INDEX $this->{sessiontable}_idx
-						ON $this->{sessiontable} (updatetime)
-				});
-			};
-			if($@) {
-				die __PACKAGE__."#__prepareSessionTable: DB error. [$@]\n";
-			}
-		}elsif($type eq 'sqlite') {
-			# sqlite3: 9223372036854775807. (64bit/signed)
-			eval {
-				$DB->execute(\$this->{dbset} => qq{
-					CREATE TABLE $this->{sessiontable} (
-						sid           INTEGER NOT NULL,
-						checkval      BLOB NOT NULL,
-						checkvalssl   BLOB NOT NULL,
-						data          BLOB,
-						updatetime    TIMESTAMP NOT NULL,
-						PRIMARY KEY (sid)
-					)
-				});
-			};
-			if($@) {
-				die __PACKAGE__."#__prepareSessionTable,]: DB error. [$@]\n";
-			}
-			eval {
-				$DB->execute(\$this->{dbset} => qq{
-					CREATE INDEX $this->{sessiontable}_idx
-						ON $this->{sessiontable} (updatetime)
-					)
-				});
-			if($@) {
-				die __PACKAGE__."#__prepareSessionTable: DB error. [$@]\n";
-			}
-			};
-		} else {
-			die __PACKAGE__."#__prepareSessionTable: the type of DB [$this->{dbgroup}] is [$type], which is not supported by the Tripletail::Session.".
-				" (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
-		}
-
-		if($TL->INI->get($this->{group} => 'logging', '0')) {
-			$TL->log(__PACKAGE__, "created table [$this->{sessiontable}] on the DB [$this->{dbgroup}].");
-		}
-	}
-
-	$this;
+    die __PACKAGE__."#__prepareSessionTable: the type of DB [$this->{dbgroup}] is [$type], which is not supported by the Tripletail::Session.".
+      " (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
 }
 
 sub _init {
@@ -347,7 +195,7 @@ sub _init {
 		$groups = [ @_ ];
 	} else {
 		my $ref = ref($_[0]);
-		die "Tripletail::Session#_init: arg[1] is an unacceptable reference. [$ref] (第1引数が不正なリファレンスです)\n";
+		die __PACKAGE__."#_init: arg[1] is an unacceptable reference. [$ref] (第1引数が不正なリファレンスです)\n";
 	}
 
 	# postRequest時に古いデータを消す。
@@ -361,7 +209,24 @@ sub _init {
 		},
 	);
 	foreach my $group (@$groups) {
-		$_instance{$group} = Tripletail::Session->__new($group);
+
+        my $dbgroup = $TL->INI->get((defined $group ? $group : 'Session') => dbgroup => undef);
+        my $DB      = $TL->getDB($dbgroup);
+        my $type    = $DB->getType;
+        my $backend = exists $BACKEND_OF{$type}
+                           ? $BACKEND_OF{$type}
+                             : die __PACKAGE__."#_init: the type of DB [$dbgroup] is [$type], which is not supported".
+                               " (DB [$dbgroup] の [$type] は対応していないDBです)\n";
+
+        eval qq{
+            use $backend;
+        };
+        if ($@) {
+            local $SIG{__DIE__} = $@;
+            die $@;
+        }
+
+        $_instance{$group} = $backend->__new($group);
 	}
 
 	undef;
@@ -400,14 +265,12 @@ sub __new {
 		die __PACKAGE__."#__new: invalid mode: [$this->{mode}] (不正なモードが指定されました)\n";
 	}
 
-	$this->{dbgroup} = $TL->INI->get($this->{group} => 'dbgroup');
-	$this->{dbgroup} or die __PACKAGE__."#new: dbgroup is not defined for the INI group [$this->{group}]. (dbgroupが指定されていません)\n";
-	$this->{dbset} = $TL->INI->get($this->{group} => 'dbset');
-	$this->{dbset} or die __PACKAGE__."#new: dbset is not defined for the INI group [$this->{group}]. (dbsetが指定されていません)\n";
-	$this->{readdbset} = $TL->INI->get($this->{group} => 'readdbset', $this->{dbset});
-	$this->{sessiontable} = $TL->INI->get($this->{group} => 'sessiontable', 'tl_session_' . $this->{group});
+	$this->{dbgroup     } = $TL->INI->get($this->{group} => 'dbgroup');
+	$this->{dbset       } = $TL->INI->get($this->{group} => 'dbset'  );
+	$this->{readdbset   } = $TL->INI->get($this->{group} => readdbset    => $this->{dbset}              );
+	$this->{sessiontable} = $TL->INI->get($this->{group} => sessiontable => 'tl_session_'.$this->{group});
 
-	$this->__prepareSessionTable;
+    $this->_createSessionTable;
 
 	$this;
 }
@@ -447,27 +310,26 @@ sub _getInstanceGroups {
 }
 
 sub _getRawCookie {
-	my $this = shift;
-	my $opts = { @_ };		# secure => 1 or 0
+    my $this = shift;
+    my $opts = { @_ }; # secure => 1 or 0
 
-	my $group;
-	if($opts->{secure}) {
-		$group = $TL->INI->get($this->{group} => 'securecookie', 'SecureCookie');
-	} else {
-		$group = $TL->INI->get($this->{group} => 'cookie', 'Cookie');
-	}
-
-	my $cookie = $TL->getRawCookie($group);
-	if($opts->{secure} && !$cookie->_isSecure) {
-		die __PACKAGE__."#_getRawCookie: cookie group [$group] is not declared to be secure.".
-			" We can't use it for secure part of session.".
-			" (セキュアなセッション部分でクッキーグループ $group を使用しようとしましたが、クッキーの secure 指定がされていません)\n";
-	} elsif(!$opts->{secure} and $cookie->_isSecure) {
-		die __PACKAGE__."#_getRawCookie: cookie group [$group] is not declared to be secure.".
-		" We can't use it for insecure part of session.".
-			" (非セキュアなセッション部分でクッキーグループ $group を使用しようとしましたが、クッキーの secure 指定がされています)\n";
-	}
-	$cookie;
+    my $group  = $opts->{secure}
+               ? $TL->INI->get($this->{group} => securecookie => 'SecureCookie')
+               : $TL->INI->get($this->{group} => cookie       => 'Cookie'      );
+    my $cookie = $TL->getRawCookie($group);
+    if ($opts->{secure} && !$cookie->isSecure) {
+        die __PACKAGE__."#_getRawCookie: cookie group [$group] is not declared to be secure.".
+          " We can't use it for secure part of session.".
+            " (セキュアなセッション部分でクッキーグループ $group を使用しようとしましたが、クッキーの secure 指定がされていません)\n";
+    }
+    elsif (!$opts->{secure} and $cookie->isSecure) {
+        die __PACKAGE__."#_getRawCookie: cookie group [$group] is not declared to be secure.".
+          " We can't use it for insecure part of session.".
+            " (非セキュアなセッション部分でクッキーグループ $group を使用しようとしましたが、クッキーの secure 指定がされています)\n";
+    }
+    else {
+        return $cookie;
+    }
 }
 
 sub _setSessionDataToCookies {
@@ -481,7 +343,7 @@ sub _setSessionDataToCookies {
 			my $cookie = $this->_getRawCookie(secure => 1);
 
 			if(defined($this->{sid})) {
-				$this->__updateSession(secure => 1);
+				$this->_updateSession;
 				my $s = join('.', $this->{sid}, $this->{checkvalssl});
 				$cookie->set('SIDS' . $this->{group} => $s);
 			} else {
@@ -503,7 +365,7 @@ sub _setSessionDataToCookies {
 			my $cookie = $this->_getRawCookie(secure => 0);
 
 			if(defined($this->{sid})) {
-				$this->__updateSession(secure => 0);
+				$this->_updateSession;
 				my $s = join('.', $this->{sid}, $this->{checkval});
 				$cookie->set('SID' . $this->{group} => $s);
 			} else {
@@ -530,7 +392,7 @@ sub _getSessionDataFromCookies {
 		if(my $s = $cookie->get('SID' . $this->{group})) {
 			# http側
 			my ($sid, $checkval) = split(/\./, $s);
-			$this->__setSession($sid, $checkval, secure => 0);
+			$this->_loadSession($sid, $checkval, secure => 0);
 		}
 	}
 
@@ -540,7 +402,7 @@ sub _getSessionDataFromCookies {
 		if(my $s = $cookie->get('SIDS' . $this->{group})) {
 			# https側
 			my ($sid, $checkval) = split(/\./, $s);
-			$this->__setSession($sid, $checkval, secure => 1);
+			$this->_loadSession($sid, $checkval, secure => 1);
 		}
 	}
 
@@ -548,22 +410,28 @@ sub _getSessionDataFromCookies {
 }
 
 sub _setSessionDataToForm {
-	# フォームを使用する場合に，Tripletail::Filter より呼び出される．
+	# フォームを使用する場合に，Tripletail::Filter::MobileHTML より呼び出される．
 	# 必要に応じてセッションデータをFormにsetする。
 	my $this = shift;
 	my $form = shift;
-
-	if($this->isHttps) {
+	
+	# Form方式はモバイル利用が前提となっている。モバイルでのdoubleモードはエラー
+	if($this->{mode} eq 'double') {
+		die __PACKAGE__."#_setSessionDataToForm: could not use double mode with MobileHTML filter.".
+			" (モバイルではdoubleモードは使えません)\n";
+	}
+	
+	if($this->{mode} eq 'http'){
 		if(defined($this->{sid})) {
-			$this->__updateSession(secure => 1);
-			my $s = join('.', $this->{sid}, $this->{checkvalssl});
-			$form->set('SIDS' . $this->{group} => $s);
-		}
-	} else {
-		if(defined($this->{sid})) {
-			$this->__updateSession(secure => 0);
+			$this->_updateSession;
 			my $s = join('.', $this->{sid}, $this->{checkval});
 			$form->set('SID' . $this->{group} => $s);
+		}
+	}elsif($this->isHttps) {
+		if(defined($this->{sid})) {
+			$this->_updateSession;
+			my $s = join('.', $this->{sid}, $this->{checkvalssl});
+			$form->set('SIDS' . $this->{group} => $s);
 		}
 	}
 
@@ -571,212 +439,57 @@ sub _setSessionDataToForm {
 }
 
 sub _getSessionDataFromForm {
-	# フォームを使用する場合に，Tripletail::InputFilter より呼び出される．
+	# フォームを使用する場合に，Tripletail::InputFilter::MobileHTML より呼び出される．
 	# フォーム中にセッションデータがあれば、それを読む。
+	# NOTE: フォームはモバイル利用が前提となっており、モバイルではdoubleモードは考慮しない
 	my $this = shift;
 	my $form = shift;
 
-	if($this->{mode} eq 'http' || ((!$this->isHttps) && $this->{mode} eq 'double')) {
+	# Form方式はモバイル利用が前提となっている。モバイルでのdoubleモードはエラー
+	if($this->{mode} eq 'double') {
+		die __PACKAGE__."#_getSessionDataFromForm: could not use double mode with MobileHTML filter.".
+			" (モバイルではdoubleモードは使えません)\n";
+	}
+	
+	if($this->{mode} eq 'http') {
 		if(my $s = $form->get('SID' . $this->{group})) {
 			# http側
 			my ($sid, $checkval) = split(/\./, $s);
-			$this->__setSession($sid, $checkval, secure => 0);
+			$this->_loadSession($sid, $checkval, secure => 0);
 		}
-	}
-
-	if($this->{mode} eq 'https' || ($this->isHttps && $this->{mode} eq 'double')) {
+	}elsif($this->{mode} eq 'https') {
 		if(my $s = $form->get('SIDS' . $this->{group})) {
 			# https側
 			my ($sid, $checkval) = split(/\./, $s);
-			$this->__setSession($sid, $checkval, secure => 1);
+			$this->_loadSession($sid, $checkval, secure => 1);
 		}
 	}
 
 	$this;
 }
 
-sub __setSession {
-	# セッションの存在確認をし，問題がなければデータをセットする．
-	my $this = shift;
-	my $sid = shift;
-	my $checkval = shift;
-	my %opts = @_;
+sub _loadSession {
+    # セッションの存在確認をし，問題がなければデータをセットする．
+    my $this     = shift;
+    my $sid      = shift;
+    my $checkval = shift;
+    my %opts     = @_;
 
-	my $DB = $TL->getDB($this->{dbgroup});
-	my $colname = ($opts{secure} ? 'checkvalssl' : 'checkval');
+    my $DB = $TL->getDB($this->{dbgroup});
+    my $type = $DB->getType;
 
-	my $type = $DB->getType;
-	if($type eq 'mysql') {
-		eval {
-			my $sessiondata = $DB->selectAllArray(\$this->{readdbset} => qq{
-				SELECT data, UNIX_TIMESTAMP(updatetime), checkval, checkvalssl
-					FROM $this->{sessiontable}
-					WHERE sid = ? AND $colname = ?
-			}, $sid, $checkval);
-
-			if(!scalar(@$sessiondata)) {
-				if($TL->INI->get($this->{group} => 'logging', '0')) {
-					$TL->log(__PACKAGE__, "The session is invalid: its session ID may not exist, or the checkval is invalid for the session: sid [$sid] checkval [$checkval] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-				}
-			}elsif( $sessiondata->[0][2] eq 'x' || $sessiondata->[0][3] eq 'x' ) {
-				if($TL->INI->get($this->{group} => 'logging', '0')) {
-					$TL->log(__PACKAGE__, "The session is invalid: it has a deletion mark: sid [$sid] checkval [$$sessiondata->[0][2]] checkvalssl [$$sessiondata->[0][3]] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-				}
-			} elsif(time - $sessiondata->[0][1] > $this->{timeout_period}) {
-				if($TL->INI->get($this->{group} => 'logging', '0')) {
-					$TL->log(__PACKAGE__, "The session is invalid: it has been expired: sid [$sid] checkval [$checkval] updatetime [$sessiondata->[0][1]] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-				}
-			} else {
-				$this->{sid} = $sid;
-				$this->{data} = $sessiondata->[0][0];
-				$this->{updatetime} = $sessiondata->[0][1];
-				$this->{checkval} = $sessiondata->[0][2];
-				$this->{checkvalssl} = $sessiondata->[0][3];
-			}
-		};
-		if($@) {
-			die __PACKAGE__."#__setSession: DB error. [$@]\n";
-		}
-	}elsif($type eq 'pgsql') {
-		eval {
-			my $sessiondata = $DB->selectAllArray(\$this->{readdbset} => qq{
-				SELECT TEXT(data), date_part('epoch',updatetime), TEXT(checkval), TEXT(checkvalssl)
-					FROM $this->{sessiontable}
-					WHERE sid = ? AND $colname = ?
-			}, $sid, $checkval);
-
-			if(!scalar(@$sessiondata)) {
-				if($TL->INI->get($this->{group} => 'logging', '0')) {
-					$TL->log(__PACKAGE__, "The session is invalid: its session ID may not exist, or the checkval is invalid for the session: sid [$sid] checkval [$checkval] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-				}
-			}elsif( $sessiondata->[0][2] eq 'x' || $sessiondata->[0][3] eq 'x' ) {
-				if($TL->INI->get($this->{group} => 'logging', '0')) {
-					$TL->log(__PACKAGE__, "The session is invalid: it has a deletion mark: sid [$sid] checkval [$$sessiondata->[0][2]] checkvalssl [$$sessiondata->[0][3]] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-				}
-			} elsif(time - $sessiondata->[0][1] > $this->{timeout_period}) {
-				if($TL->INI->get($this->{group} => 'logging', '0')) {
-					$TL->log(__PACKAGE__, "The session is invalid: it has been expired: sid [$sid] checkval [$checkval] updatetime [$sessiondata->[0][1]] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-				}
-			} else {
-				$this->{sid} = $sid;
-				$this->{data} = $sessiondata->[0][0];
-				$this->{updatetime} = $sessiondata->[0][1];
-				$this->{checkval} = $sessiondata->[0][2];
-				$this->{checkvalssl} = $sessiondata->[0][3];
-			}
-		};
-		if($@) {
-			die __PACKAGE__."#__setSession: DB error. [$@]\n";
-		}
-	}elsif($type eq 'sqlite') {
-		eval {
-			my $sessiondata = $DB->selectAllArray(\$this->{readdbset} => qq{
-				SELECT data, datetime(updatetime, 'localtime'), checkval, checkvalssl
-					FROM $this->{sessiontable}
-					WHERE sid = ? AND $colname = ?
-			}, $sid, $checkval);
-
-			my $updatetime = $sessiondata && @$sessiondata && $TL->newDateTime($sessiondata->[0][1])->getEpoch();
-			my $now = time;
-			if(!scalar(@$sessiondata)) {
-				if($TL->INI->get($this->{group} => 'logging', '0')) {
-					$TL->log(__PACKAGE__, "The session is invalid: its session ID may not exist, or the checkval is invalid for the session: sid [$sid] checkval [$checkval] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-				}
-			} elsif($now - $updatetime > $this->{timeout_period}) {
-				if($TL->INI->get($this->{group} => 'logging', '0')) {
-					$TL->log(__PACKAGE__, "The session is invalid: it has been expired: sid [$sid] checkval [$checkval] updatetime [$sessiondata->[0][1]=$updatetime] on the DB [$this->{dbgroup}][$this->{sessiontable}], now=[$now], timeout=[$this->{timeout_period}].");
-				}
-			} else {
-				$this->{sid} = $sid;
-				$this->{data} = $sessiondata->[0][0];
-				$this->{updatetime} = $updatetime;
-				$this->{checkval} = $sessiondata->[0][2];
-				$this->{checkvalssl} = $sessiondata->[0][3];
-			}
-		};
-		if($@) {
-			die __PACKAGE__."#__setSession: DB error. [$@]\n";
-		}
-	} else {
-		die __PACKAGE__."#__setSession: the type of DB [$this->{dbgroup}] is [$type], which is not supported by the Tripletail::Session.".
-			" (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
-	}
-
-	if(defined $this->{sid}) {
-		my $datalog = (defined($this->{data}) ? $this->{data} : '(undef)');
-		if($TL->INI->get($this->{group} => 'logging', '0')) {
-			$TL->log(__PACKAGE__, "Succeeded to read a valid session data. secure [$opts{secure}] sid [$this->{sid}] checkval [$this->{checkval}] checkvalssl [$this->{checkvalssl}] data [$datalog] updatetime [$this->{updatetime}] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-		}
-	} else {
-		if($TL->INI->get($this->{group} => 'logging', '0')) {
-			$TL->log(__PACKAGE__, "Failed to read a valid session data. secure [$opts{secure}] sid [$sid] $colname [$checkval] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-		}
-	}
-
-	$this;
+    die __PACKAGE__."#_loadSession: the type of DB [$this->{dbgroup}] is [$type], which is not supported by Tripletail::Session.".
+      " (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
 }
 
-sub __updateSession {
-	my $this = shift;
-	my %opts = @_;
+sub _updateSession {
+    my $this = shift;
 
-	if(!defined($this->{updatetime})) {
-		return $this;
-	}
+    my $DB = $TL->getDB($this->{dbgroup});
+    my $type = $DB->getType;
 
-	if(time - $this->{updatetime} < $this->{updateinterval_period}) {
-		return $this;
-	}
-
-	my $DB = $TL->getDB($this->{dbgroup});
-
-	my $type = $DB->getType;
-	if($type eq 'mysql') {
-		eval {
-			my $sessiondata = $DB->execute(\$this->{dbset} => qq{
-				UPDATE $this->{sessiontable}
-					SET updatetime = now(), data = ?
-					WHERE sid = ?
-			}, $this->{data}, $this->{sid});
-		};
-		if($@) {
-			die __PACKAGE__."#__updateSession: DB error. [$@]\n";
-		}
-	}elsif($type eq 'pgsql') {
-		eval {
-			my $sessiondata = $DB->execute(\$this->{dbset} => qq{
-				UPDATE $this->{sessiontable}
-					SET updatetime = CURRENT_TIMESTAMP(0), data = ?
-					WHERE sid = ?
-			}, $this->{data}, $this->{sid});
-		};
-		if($@) {
-			die __PACKAGE__."#__updateSession: DB error. [$@]\n";
-		}
-	}elsif($type eq 'sqlite') {
-		eval {
-			my $sessiondata = $DB->execute(\$this->{dbset} => qq{
-				UPDATE $this->{sessiontable}
-					SET updatetime = CURRENT_TIMESTAMP, data = ?
-					WHERE sid = ?
-			}, $this->{data}, $this->{sid});
-		};
-		if($@) {
-			die __PACKAGE__."#__updateSession: DB error. [$@]\n";
-		}
-	} else {
-		die __PACKAGE__."#__updateSession, the type of DB [$this->{dbgroup}] is [$type], which is not supported by the Tripletail::Session.".
-			" (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
-	}
-
-	$this->{updatetime} = time;
-
-	my $datalog = (defined($this->{data}) ? $this->{data} : '(undef)');
-	if($TL->INI->get($this->{group} => 'logging', '0')) {
-		$TL->log(__PACKAGE__, "The session got updated. sid [$this->{sid}] data [$datalog] on the DB [$this->{dbgroup}][$this->{sessiontable}].");
-	}
-
-	$this;
+    die __PACKAGE__."#_updateSession, the type of DB [$this->{dbgroup}] is [$type], which is not supported by Tripletail::Session.".
+      " (DB [$this->{dbgroup}] の [$type] は対応していないDBです)\n";
 }
 
 
@@ -793,16 +506,6 @@ sub _createSessionCheck
 {
 	my $this     = shift;
 	my $issecure = shift;
-
-	do {
-		local $SIG{__DIE__} = 'DEFAULT';
-		eval 'use Digest::HMAC_SHA1 qw(hmac_sha1_hex)';
-	};
-	if($@)
-	{
-		my $err = "failed to load Digest::HMAC_SHA1 [$@] (Digest::HMAC_SHA1が使用できません)\n";
-		return (undef, undef, $err);
-	}
 
 	my $sessiongroup = $this->{group};
 	my $csrfkey = $TL->INI->get($sessiongroup => 'csrfkey', undef);
@@ -881,7 +584,7 @@ Tripletail::Session - セッション
 
 64bit符号無し整数値の管理機能を持ったセッション管理クラス。
 
-セッションは64bit整数から負の数を除いた範囲（0〜9223372036854775807）以外の
+セッションは64bit整数から負の数を除いた範囲（0..9223372036854775807）以外の
 データを取り扱えない為、その他のデータを管理したい場合は、
 セッションキーを用い別途管理する必要がある。 
 

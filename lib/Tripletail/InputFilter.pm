@@ -32,7 +32,6 @@ sub _formFromPairs {
 			# このキーに対するファイル名が存在する。
 			$form->setFileName(
 				$this->_raw2utf8($key => $incode) => $this->_raw2utf8($filename_h->{$key} => $incode));
-			
 		}
 
 		if (ref $value) {
@@ -74,7 +73,7 @@ sub _getIncode {
 	}
 
 	# 文字コードが指定されていたらそれを使用
-	my $charset = $TL->INI->get('InputFilter' => 'charset');
+	my $charset = $TL->INI->get('InputFilter' => 'charset' => undef);
 
 	if(defined($charset)) {
 		$charset;

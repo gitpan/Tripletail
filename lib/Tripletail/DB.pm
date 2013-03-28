@@ -5,19 +5,33 @@ package Tripletail::DB;
 use strict;
 use warnings;
 use Tripletail;
-require Time::HiRes;
+use Tripletail::DB::Dbh;
+use Tripletail::DB::Sth;
+use Scalar::Lazy;
+use Hash::Util qw(lock_hash);
+use Time::HiRes;
 use DBI qw(:sql_types);
 
-sub _INIT_REQUEST_HOOK_PRIORITY()  { -1_000_000 } # 順序は問わない
+sub _INIT_REQUEST_HOOK_PRIORITY() { -1_000_000 } # 順序は問わない
 sub _POST_REQUEST_HOOK_PRIORITY() { -1_000_000 } # セッションフックの後
 sub _TERM_HOOK_PRIORITY()         { -1_000_000 } # セッションフックの後
 
-our $INSTANCES = {}; # グループ名 => インスタンス
+my %INSTANCES; # グループ名 => インスタンス
 
 sub _TX_STATE_NONE()      { 0 }
 sub _TX_STATE_ACTIVE()    { 1 }
 sub _TX_STATE_CLOSEWAIT() { 2 }
-our @TX_STATE_NAME = qw(NONE ACTIVE CLOSEWAIT);
+our $_tx_state = _TX_STATE_NONE; # dynamically scoped
+
+my %BACKEND_OF = (
+    mysql     => 'Tripletail::DB::Backend::MySQL',
+    pgsql     => 'Tripletail::DB::Backend::PgSQL',
+    oracle    => 'Tripletail::DB::Backend::Oracle',
+    interbase => 'Tripletail::DB::Backend::Interbase',
+    sqlite    => 'Tripletail::DB::Backend::SQLite',
+    mssql     => 'Tripletail::DB::Backend::MSSQL',
+   );
+lock_hash(%BACKEND_OF);
 
 1;
 
@@ -31,7 +45,7 @@ sub _getInstance {
 		die "TL#getDB: arg[1] is a reference. (第1引数がリファレンスです)\n";
 	}
 
-	my $obj = $INSTANCES->{$group};
+	my $obj = $INSTANCES{$group};
 	if(!$obj) {
 		die "TL#getDB: DB group [$group] was not passed to the startCgi() / trapError(). (startCgi/trapErrorのDBに指定されていないDBグループ[${group}]が指定されました)\n";
 	}
@@ -40,10 +54,10 @@ sub _getInstance {
 }
 
 sub _reconnectSilentlyAll {
-    # fork された後、子プロセス側で呼ばれる。現在 $INSTANCES に保存されている
+    # fork された後、子プロセス側で呼ばれる。現在 %INSTANCES に保存されている
     # DBI-dbh は全て親と共有されているので、それら全ての InactiveDestroy フラグを
     # 立ててから接続し直さなければならない。
-    foreach my $db (values %$INSTANCES) {
+    foreach my $db (values %INSTANCES) {
         $db->_reconnectSilently;
     }
 
@@ -56,143 +70,10 @@ sub _reconnectSilently {
     # 全ての DB コネクションの InactiveDestroy フラグを立ててから再接続する。
     foreach my $dbh (values %{$this->{dbname}}) {
         $dbh->getDbh->{InactiveDestroy} = 1;
-        $dbh->connect($this->{type});
+        $dbh->connect;
     }
-    $this->{tx_state} = _TX_STATE_NONE;
 
     $this;
-}
-
-# エラー時に, DB別固有エラー情報から共通エラー情報に変換.
-# 全てのDB種別で実装されているわけではない.
-# 実装されていなければ常に COMMON_ERROR 扱い.
-sub _errinfo
-{
-  my $pkg  = shift;
-  my $dbh  = shift;
-  my $type = shift || (ref($pkg)&&$pkg->getType());
-
-  $dbh  or die __PACKAGE__."#_errinfo, no dbh. (dbhがありません)";
-  $type or die __PACKAGE__."#_errinfo, no type. (typeがありません)";
-
-  our $_ERRMAP ||= {};
-  $_ERRMAP->{$type} ||= do{
-    # $pkg->_load_errmap_mysql();
-    my $subname = "_load_errmap_$type";
-    my $sub = $pkg->can($subname);
-    $sub ? $pkg->$sub() : {};
-  };
-
-  my $errno;  # DB固有のエラーコード.
-  my $errstr; # DB固有のエラーメッセージ.
-  my $errkey; # 共通のエラー識別キー.
-  if( $type eq 'mysql' )
-  {
-    $errno  = $dbh->{mysql_errno};
-    $errstr = $dbh->{mysql_error};
-    $errkey = $_ERRMAP->{$type}{$errno} || 'COMMON_ERROR';
-  }elsif( $type eq 'sqlite' )
-  {
-    $errno  = $dbh->err;
-    $errstr = $dbh->errstr;
-    $errkey = $_ERRMAP->{$type}{$errno} || 'COMMON_ERROR';
-    if( $errno==1 )
-    {
-      # ちゃんとエラー番号が返ってこない?
-      if( $errstr =~ /^no such table:/ )
-      {
-        $errkey = 'NO_SUCH_OBJECT';
-      }elsif( $errstr =~ /^unable to open database file/ )
-      {
-        $errkey = $!{EACCES} ? 'CONNECT_DENIED' : 'CONNECT_NO_SERVER';
-      }elsif( $errstr =~ /^attempt to write a readonly database/ )
-      {
-        $errkey = 'ACCESS_DENIED';
-      }
-    }
-  }else
-  {
-    $errno  = $dbh->err;
-    $errstr = $dbh->errstr;
-    $errkey = 'COMMON_ERROR';
-    #die __PACKAGE__."#_errinfo: DB type [$type] is not supported. (DB type [$type] はサポートされていません)\n";
-  }
-
-  $pkg->_errinfo2($type, $errkey, $errno, $errstr);
-}
-sub _errinfo2
-{
-  my $pkg    = shift;
-  my $type   = shift;
-  my $errkey = shift || 'COMMON_ERROR';
-  my $errno  = shift;
-  my $errstr = shift;
-
-  our $_ERRMSG ||= $pkg->_load_errmsg();
-
-  my $errmsg = $_ERRMSG->{$errkey};
-  my ($errmsg_en, $errmsg_ja) = $errmsg =~ /^(.*) \((.*)\)\z/ or die "invalid message format: $errmsg";
-  my $info = {
-    $errkey   => $errmsg,
-    _key      => $errkey,
-    _msg      => $errmsg,
-    _msg_en   => $errmsg_en,
-    _msg_ja   => $errmsg_ja,
-    _dbtype   => $type,
-    _dberrno  => $errno,
-    _dberrstr => $errstr,
-  };
-}
-
-# 共通エラーコードの可読メッセージ.
-sub _load_errmsg
-{
-  +{
-    ACCESS_DENIED  => 'Access denied (アクセス権限がありません)',
-    ALREADY_EXISTS => 'Already exists (処理対象が既に存在します)',
-    COMMON_ERROR   => 'Error (何らかのエラー)',
-    CONNECT_DENIED    => 'Connection denied (接続する権限がありません)',
-    CONNECT_NO_SERVER => 'No server to connect (接続先サーバが存在しません)',
-    CONNECT_PROTOCOL_MISMATCH => 'Connection protocol mismatch (接続プロトコルが一致しません)',
-    NO_ERROR       => 'Success (処理成功)',
-    NO_SUCH_OBJECT => 'No such object (処理対象が存在しません)',
-    SYNTAX_ERROR   => 'Syntax error (構文エラー)',
-  };
-}
-# エラー情報のDB別固有エラーコードから共通コードへのマッピング(mysql).
-sub _load_errmap_mysql
-{
-  # http://dev.mysql.com/doc/refman/5.0/en/error-messages-server.html
-  # http://dev.mysql.com/doc/refman/5.0/en/error-messages-client.html
-  #
-  +{
-    0    => 'NO_ERROR',
-    1044 => 'ACCESS_DENIED',
-    1045 => 'CONNECT_DENIED',
-    1050 => 'ALREADY_EXISTS',
-    1064 => 'SYNTAX_ERROR',
-    1146 => 'NO_SUCH_OBJECT',
-    1149 => 'SYNTAX_ERROR',
-    1251 => 'CONNECT_PROTOCOL_MISMATCH',
-    2002 => 'CONNECT_NO_SERVER',
-    2003 => 'CONNECT_NO_SERVER',
-    2005 => 'CONNECT_NO_SERVER',
-  };
-}
-sub _load_errmap_pgsql
-{
-  # http://www.postgresql.jp/document/pg836doc/html/errcodes-appendix.html
-  +{
-    00000 => 'NO_ERROR',
-  };
-}
-# エラー情報のDB別固有エラーコードから共通コードへのマッピング(sqlite).
-sub _load_errmap_sqlite
-{
-  # http://www.sqlite.org/c3ref/c_abort.html
-  +{
-    0    => 'NO_ERROR',
-  };
 }
 
 
@@ -202,10 +83,9 @@ sub connect {
 	# 全てのDBコネクションの接続を確立する．
 	foreach my $dbh (values %{$this->{dbname}}) {
 		if(!$dbh->ping) {
-			$dbh->connect($this->{type});
+			$dbh->connect;
 		}
 	}
-	$this->{tx_state} = _TX_STATE_NONE;
 
 	$this;
 }
@@ -216,47 +96,68 @@ sub disconnect {
 	foreach my $dbh (values %{$this->{dbname}}) {
 		$dbh->disconnect;
 	}
-	$this->{tx_state} = _TX_STATE_NONE;
 
 	$this;
 }
 
-sub tx
-{
-	my $this = shift;
-	my $setname = !ref($_[0]) && shift;
-	my $sub  = shift;
-	
-	my @ret;
-	
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
-	my $succ = 0;
-	my $anchor = Tripletail::DB::_scope->new(sub{
-		$succ and return;
-		# on exception.
-		if( $this->{tx_state}==_TX_STATE_ACTIVE )
-		{
-			$this->rollback();
-		}
-		$this->{tx_state} = _TX_STATE_NONE;
-	});
-	$this->begin($setname);
-	local($Tripletail::Error::LAST_DBH) = $this;
-	$this->{tx_state} = _TX_STATE_ACTIVE;
-	if( wantarray )
-	{
-		@ret    = $sub->();
-	}else
-	{
-		$ret[0] = $sub->();
-	}
-	if( $this->{trans_dbh} )
-	{
-		$this->commit();
-	}
-	$this->{tx_state} = _TX_STATE_NONE;
-	$succ = 1;
-	wantarray ? @ret : $ret[0];
+sub tx {
+    my $this    = shift;
+    my $setname = !ref($_[0]) && shift;
+    my $sub     = shift;
+
+    if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+        $this->_closewait_broken();
+    }
+
+    local $Tripletail::Error::LAST_DB_ERROR
+      = lazy { $this->getDbh($setname)->_errinfo };
+
+    my @ret;
+    while (1) {
+        $this->begin($setname);
+        local $_tx_state = _TX_STATE_ACTIVE;
+
+        if (wantarray) {
+            @ret = eval { $sub->() };
+        }
+        else {
+            $ret[0] = eval { scalar $sub->() };
+        }
+        if (my $err = $@) {
+            my $set = $this->_getDbSetName($setname);
+            my $dbh = $this->{dbh}{$set};
+            if ($this->{autoretry} and
+                  $dbh->_last_error_info->{errkey} eq 'DEADLOCK_DETECTED') {
+                if ($this->{trans_dbh}) {
+                    $this->rollback();
+                }
+                $TL->log(
+                    __PACKAGE__,
+                    "Detected a deadlock. Restarting the transaction...");
+                redo;
+            }
+            else {
+                if ($this->{trans_dbh}) {
+                    $this->rollback();
+                }
+                local $SIG{__DIE__} = 'DEFAULT';
+                die $err;
+            }
+        }
+        else {
+            if ($this->{trans_dbh}) {
+                $this->commit();
+            }
+            last;
+        }
+    }
+
+    if (wantarray) {
+        return @ret;
+    }
+    else {
+        return $ret[0];
+    }
 }
 
 sub _closewait_broken
@@ -281,12 +182,14 @@ sub _requireTx
 	my $this    = shift;
 	my $setname = shift;
 	my $where   = shift;
-	
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken($where);
+
+	if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+		$this->_closewait_broken($where);
+	}
 	if( my $trans = $this->{trans_dbh} )
 	{
 		my $set = $this->_getDbSetName($setname);
-		
+
 		my $trans_set = $trans->getSetName;
 		if($trans_set eq $set)
 		{
@@ -324,15 +227,16 @@ sub begin {
 
 	my $sql = $this->__nameQuery('BEGIN', $dbh);
 
-	$TL->getDebug->_dbLog(sub{
-		group   => $this->{group},
-		set     => $dbh->getSetName,
-		db      => $dbh->getGroup,
-		id      => -1,
-		query   => $sql,
-		params  => [],
-		elapsed => $elapsed,
-	});
+    $TL->getDebug->_dbLog(
+        lazy {
+            +{ group   => $this->{group},
+               set     => $dbh->getSetName,
+               db      => $dbh->getGroup,
+               id      => -1,
+               query   => $sql,
+               params  => [],
+               elapsed => $elapsed }
+        });
 
 	$this->{trans_dbh} = $dbh;
 	$this;
@@ -340,8 +244,11 @@ sub begin {
 
 sub rollback {
 	my $this = shift;
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
-	
+
+	if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+		$this->_closewait_broken();
+	}
+
 	my $dbh = $this->{trans_dbh};
 	if(!defined($dbh)) {
 		die __PACKAGE__."#rollback: not in transaction. (トランザクションの実行中ではありません)\n";
@@ -350,24 +257,24 @@ sub rollback {
 	my $begintime = [Time::HiRes::gettimeofday()];
 
 	$dbh->rollback;
-	if( $this->{tx_state}==_TX_STATE_ACTIVE )
-	{
-		$this->{tx_state} = _TX_STATE_CLOSEWAIT;
+	if ($_tx_state == _TX_STATE_ACTIVE) {
+		$_tx_state = _TX_STATE_CLOSEWAIT;
 	}
 
 	my $elapsed = Time::HiRes::tv_interval($begintime);
 
 	my $sql = $this->__nameQuery('ROLLBACK', $dbh);
 
-	$TL->getDebug->_dbLog(sub{
-		group   => $this->{group},
-		set     => $dbh->getSetName,
-		db      => $dbh->getGroup,
-		id      => -1,
-		query   => $sql,
-		params  => [],
-		elapsed => $elapsed,
-	});
+    $TL->getDebug->_dbLog(
+        lazy {
+            +{ group   => $this->{group},
+               set     => $dbh->getSetName,
+               db      => $dbh->getGroup,
+               id      => -1,
+               query   => $sql,
+               params  => [],
+               elapsed => $elapsed }
+        });
 
 	$this->{trans_dbh} = undef;
 	$this;
@@ -375,7 +282,10 @@ sub rollback {
 
 sub commit {
 	my $this = shift;
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
+
+	if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+		$this->_closewait_broken();
+	}
 
 	my $dbh = $this->{trans_dbh};
 	if (!defined($dbh)) {
@@ -385,24 +295,24 @@ sub commit {
 	my $begintime = [Time::HiRes::gettimeofday()];
 
 	$dbh->commit;
-	if( $this->{tx_state}==_TX_STATE_ACTIVE )
-	{
-		$this->{tx_state} = _TX_STATE_CLOSEWAIT;
+	if ($_tx_state == _TX_STATE_ACTIVE) {
+		$_tx_state = _TX_STATE_CLOSEWAIT;
 	}
 
 	my $elapsed = Time::HiRes::tv_interval($begintime);
 
 	my $sql = $this->__nameQuery('COMMIT', $dbh);
 
-	$TL->getDebug->_dbLog(sub{
-		group   => $this->{group},
-		set     => $dbh->getSetName,
-		db      => $dbh->getGroup,
-		id      => -1,
-		query   => $sql,
-		params  => [],
-		elapsed => $elapsed,
-	});
+    $TL->getDebug->_dbLog(
+        lazy {
+            +{ group   => $this->{group},
+               set     => $dbh->getSetName,
+               db      => $dbh->getGroup,
+               id      => -1,
+               query   => $sql,
+               params  => [],
+               elapsed => $elapsed }
+        });
 
 	$this->{trans_dbh} = undef;
 	$this;
@@ -424,8 +334,11 @@ sub setDefaultSet {
 sub execute {
 	my $this = shift;
 	my $dbset = shift;
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
-	
+
+	if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+		$this->_closewait_broken();
+	}
+
 	if(ref($dbset)) {
 		$dbset = $$dbset;
 	} else {
@@ -521,7 +434,7 @@ sub execute {
 		$dbh->$sub(\$sql, \@params);
 	}
 
-	my $sth = Tripletail::DB::STH->new(
+	my $sth = Tripletail::DB::Sth->new(
 		$this,
 		$dbh,
 		$dbh->getDbh->prepare($sql)
@@ -564,52 +477,206 @@ sub execute {
 	my $begintime = [Time::HiRes::gettimeofday()];
 	my $log_params = \@_;
 
-	while(1) {
-		eval {
-			local $SIG{__DIE__} = 'DEFAULT';
+    while (1) {
+        $TL->eval(sub{ $sth->{ret} = $sth->{sth}->execute });
+        if (my $err = $@) {
+            if ($dbh->_last_error_info->{errkey} eq 'DEADLOCK_DETECTED') {
+                if (not $this->{trans_dbh}) {
+                    $TL->log(
+                        __PACKAGE__,
+                        "Detected a deadlock. Restarting the transaction...");
+                    redo;
+                }
+            }
 
-			$sth->{ret} = $sth->{sth}->execute;
-		};
-		if( my $err = $@ ) {
-			my $elapsed = Time::HiRes::tv_interval($begintime);
-			$TL->getDebug->_dbLog(sub{
-				group   => $this->{group},
-				set     => $dbh->getSetName,
-				db      => $dbh->getGroup,
-				id      => $sth->{id},
-				query   => $sql_backup . " /* ERROR: $err */",
-				params  => $log_params,
-				elapsed => $elapsed,
-				names   => $TL->eval(sub{ $sth->nameArray }) || undef,
-				error   => 1,
-			});
+            my $elapsed = Time::HiRes::tv_interval($begintime);
+            $TL->getDebug->_dbLog(
+                lazy {
+                    +{ group   => $this->{group},
+                       set     => $dbh->getSetName,
+                       db      => $dbh->getGroup,
+                       id      => $sth->{id},
+                       query   => $sql_backup . " /* ERROR: $err */",
+                       params  => $log_params,
+                       elapsed => $elapsed,
+                       names   => $TL->eval(sub{ $sth->nameArray }) || undef,
+                       error   => 1 }
+                });
 
-			die $err;
-		} else {
-			# dieしなかったならループ終了
-			last;
-		}
-	}
+            die $err;
+        }
+        else {
+            last;
+        }
+    }
 
-	my $elapsed = Time::HiRes::tv_interval($begintime);
-	$TL->getDebug->_dbLog(sub{
-		group   => $this->{group},
-		set     => $dbh->getSetName,
-		db      => $dbh->getGroup,
-		id      => $sth->{id},
-		query   => $sql_backup,
-		params  => $log_params,
-		elapsed => $elapsed,
-		names   => $TL->eval(sub{ $sth->nameArray }) || undef
-	});
+    my $elapsed = Time::HiRes::tv_interval($begintime);
+    $TL->getDebug->_dbLog(
+        lazy {
+            +{ group   => $this->{group},
+               set     => $dbh->getSetName,
+               db      => $dbh->getGroup,
+               id      => $sth->{id},
+               query   => $sql_backup,
+               params  => $log_params,
+               elapsed => $elapsed,
+               names   => $TL->eval(sub{ $sth->nameArray }) || undef }
+        });
 
-	$sth;
+    $sth;
+}
+
+sub upsert {
+    my $this  = shift;
+
+    if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+        $this->_closewait_broken();
+    }
+
+    my ($dbset, $schema, $table, $keys, $values) = do {
+        if (@_ == 5) {
+            @_;
+        }
+        elsif (@_ == 4) {
+            if (ref $_[0]) {
+                # ($dbset, ...)
+                if (ref $_[2]) {
+                    # ($dbset, $table, $keys, $values)
+                    ($_[0], undef, @_[1, 2, 3]);
+                }
+                else {
+                    # ($dbset, $schema, $table, $keys)
+                    (@_, {});
+                }
+            }
+            else {
+                # ($schema, $table, $keys, $values)
+                (undef, @_);
+            }
+        }
+        elsif (@_ == 3) {
+            if (ref $_[0]) {
+                # ($dbset, $table, $keys)
+                ($_[0], undef, @_[1, 2], {});
+            }
+            else {
+                if (ref $_[1]) {
+                    # ($table, $keys, $values)
+                    (undef, undef, @_);
+                }
+                else {
+                    # ($schema, $table, $keys)
+                    (undef, @_, {});
+                }
+            }
+        }
+        elsif (@_ == 2) {
+            # ($table, $keys)
+            (undef, undef, @_, {});
+        }
+        else {
+            die __PACKAGE__."#upsert, illegal number of arguments. (引数の数が不正です)\n";
+        }
+    };
+
+    my $dbh = do {
+        if (defined $dbset) {
+            # DBセットが明示的に指定された
+            if (ref($dbset) ne 'SCALAR') {
+                die __PACKAGE__."#upsert, arg[dbset] is not a SCALAR ref (arg[dbset] がスカラーリファレンスでありません)\n";
+            }
+
+            my $dbh = $this->{dbh}{$$dbset};
+            if (!defined $dbh) {
+                die __PACKAGE__."#upsert, DB set [$$dbset] is unavailable. (DB Set [$$dbset] の指定が不正です)\n";
+            }
+
+            $dbh;
+        }
+        else {
+            $this->{trans_dbh}      ? $this->{trans_dbh}
+              : $this->{locked_dbh} ? $this->{locked_dbh}
+              : $this->{dbh}{$this->_getDbSetName};
+        }
+    };
+
+    if (!defined $table) {
+        die __PACKAGE__."#upsert, arg[table] is undefined (arg[table] が未定義です)\n";
+    }
+    elsif (defined $schema && ref $schema) {
+        die __PACKAGE__."#upsert, arg[schema] is a ref (arg[schema] がリファレンスです)\n";
+    }
+    elsif (ref $table) {
+        die __PACKAGE__."#upsert, arg[table] is a ref (arg[table] がリファレンスです)\n";
+    }
+    elsif (ref($keys) ne 'HASH') {
+        die __PACKAGE__."#upsert, arg[keys] is not an HASH ref (arg[keys] が HASH リファレンスでありません)\n";
+    }
+    elsif (keys %$keys == 0) {
+        die __PACKAGE__."#upsert, arg[keys] is an empty HASH ref (arg[keys] が空の HASH リファレンスです)\n";
+    }
+    elsif (ref($values) ne 'HASH') {
+        die __PACKAGE__."#upsert, arg[values] is not an HASH ref (arg[values] が HASH リファレンスでありません)\n";
+    }
+
+    my $sql = $this->__nameQuery(
+                  $dbh->_mk_upsert_query($schema, $table, $keys, $values), $dbh);
+
+    my $begintime = [Time::HiRes::gettimeofday()];
+    while (1) {
+        $TL->eval(sub{ $dbh->{dbh}->do($sql) });
+        if (my $err = $@) {
+            if ($dbh->_last_error_info->{errkey} eq 'DEADLOCK_DETECTED') {
+                if (not $this->{trans_dbh}) {
+                    $TL->log(
+                        __PACKAGE__,
+                        "Detected a deadlock. Restarting the transaction...");
+                    redo;
+                }
+            }
+
+            my $elapsed = Time::HiRes::tv_interval($begintime);
+            $TL->getDebug->_dbLog(
+                lazy {
+                    +{ group   => $this->{group},
+                       set     => $dbh->getSetName,
+                       db      => $dbh->getGroup,
+                       id      => -1,
+                       query   => $sql,
+                       params  => [],
+                       elapsed => $elapsed,
+                       error   => 1 }
+                });
+
+            die $err;
+        }
+        else {
+            last;
+        }
+    }
+
+    my $elapsed = Time::HiRes::tv_interval($begintime);
+    $TL->getDebug->_dbLog(
+        lazy {
+            +{ group   => $this->{group},
+               set     => $dbh->getSetName,
+               db      => $dbh->getGroup,
+               id      => -1,
+               query   => $sql,
+               params  => [],
+               elapsed => $elapsed }
+        });
+
+    return $this;
 }
 
 sub selectAllHash {
 	my $this = shift;
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
-	
+
+	if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+		$this->_closewait_broken();
+	}
+
 	my $sth = $this->execute(@_);
 	my $result = [];
 	while(my $data = $sth->fetchHash) {
@@ -620,7 +687,10 @@ sub selectAllHash {
 
 sub selectAllArray {
 	my $this = shift;
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
+
+	if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+		$this->_closewait_broken();
+	}
 
 	my $sth = $this->execute(@_);
 	my $result = [];
@@ -632,164 +702,211 @@ sub selectAllArray {
 
 sub selectRowHash {
 	my $this = shift;
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
-	
+
+	if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+		$this->_closewait_broken();
+	}
+
 	my $sth = $this->execute(@_);
 	my $data = $sth->fetchHash();
 	$data = $data ? {%$data} : undef;
 	$sth->finish();
-	
+
 	$data;
 }
 
 sub selectRowArray {
 	my $this = shift;
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
-	
+
+	if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+		$this->_closewait_broken();
+	}
+
 	my $sth = $this->execute(@_);
 	my $data = $sth->fetchArray();
 	$data = $data ? [@$data] : undef;
 	$sth->finish();
-	
+
 	$data;
 }
 
+sub findTables {
+    my $this = shift;
+    my $args = ref($_[0]) eq 'HASH' ? $_[0] : { @_ };
+
+    my $set = $this->_getDbSetName($args->{set});
+    my $dbh = $this->{dbh}{$set};
+
+    return Tripletail::DB::Sth->new(
+               $this,
+               $dbh,
+               $dbh->getDbh->table_info(
+                   undef, $args->{schema}, $args->{table}, 'TABLE'));
+}
+
+sub getTableColumns {
+    my $this = shift;
+
+    my ($dbset, $schema, $table) = do {
+        if (@_ == 3) {
+            @_;
+        }
+        elsif (@_ == 2) {
+            if (ref $_[0]) {
+                # ($dbset, table)
+                ($_[0], undef, $_[1]);
+            }
+            else {
+                # ($schema, $table)
+                (undef, @_);
+            }
+        }
+        elsif (@_ == 1) {
+            # ($table)
+            (undef, undef, @_);
+        }
+        else {
+            die __PACKAGE__."#getTableColumns, illegal number of arguments. (引数の数が不正です)\n";
+        }
+    };
+
+    my $escaped_schema
+      = defined $schema ? $this->escapeLike($schema, $$dbset)
+      :                   undef
+      ;
+    my $escaped_table
+      = defined $table  ? $this->escapeLike($table,  $$dbset)
+      :                   undef
+      ;
+    my $set = $this->_getDbSetName($$dbset);
+    my $dbh = $this->{dbh}{$set};
+    my $sth = $dbh->getDbh->column_info(
+                  undef, $escaped_schema, $escaped_table, undef);
+
+    my @rows;
+    while (my $row = $sth->fetchrow_hashref) {
+        push @rows, $row;
+    }
+
+    if (@rows) {
+        return \@rows;
+    }
+    else {
+        return;
+    }
+}
+
 sub lock {
-	my $this = shift;
-	my $opts = { @_ };
+    my $this = shift;
+    my $opts = { @_ };
 
-	my @tables;			# [name, alias, 'WRITE' or 'READ']
-	foreach my $type (qw(read write))
-	{
-		if(defined(my $table = $opts->{$type})) {
-			if(!ref($table)) {
-				push @tables, [$table, undef, uc $type];
-			} elsif (ref($table) eq 'ARRAY') {
-				push @tables, map {
-					if(!defined) {
-						die __PACKAGE__."#lock: $type => [...] contains an undef. (${type}にundefが含まれています)\n";
-					} elsif('HASH' eq ref) {
-						[(keys %$_)[0], (values %$_)[0], uc $type];
-					} elsif(ref) {
-						die __PACKAGE__."#lock: $type => [...] contains a reference. [$_] (${type}にリファレンスが含まれています)\n";
-					} else {
-						[$_, undef, uc $type];
-					}
-				} @$table;
-			} else {
-				die __PACKAGE__."#lock: arg[$type] is an unacceptable reference. [$table] (arg[$type]は不正なリファレンスです)\n";
-			}
-		}
-	};
+    my @tables;         # [name, alias, 'WRITE' or 'READ']
+    foreach my $type (qw(read write)) {
+        if (defined(my $table = $opts->{$type})) {
+            if (!ref $table) {
+                push @tables, [$table, undef, uc $type];
+            }
+            elsif (ref($table) eq 'ARRAY') {
+                push @tables,
+                  map {
+                      if (!defined) {
+                          die __PACKAGE__."#lock: $type => [...] contains an undef. (${type}にundefが含まれています)\n";
+                      }
+                      elsif (ref($_) eq 'HASH' && scalar(keys %$_) == 1) {
+                          [(keys %$_)[0], (values %$_)[0], uc $type];
+                      }
+                      elsif (ref) {
+                          die __PACKAGE__."#lock: $type => [...] contains a reference. [$_] (${type}にリファレンスが含まれています)\n";
+                      }
+                      else {
+                          [$_, undef, uc $type];
+                      }
+                  } @$table;
+            }
+            else {
+                die __PACKAGE__."#lock: arg[$type] is an unacceptable reference. [$table] (arg[$type]は不正なリファレンスです)\n";
+            }
+        }
+    };
 
-	if(!@tables) {
-		die __PACKAGE__."#lock: no tables are being locked. Specify at least one table. (テーブルが1つも指定されていません)\n";
-	}
+    if(!@tables) {
+        die __PACKAGE__."#lock: no tables are being locked. Specify at least one table. (テーブルが1つも指定されていません)\n";
+    }
 
-	my $set = $this->_getDbSetName($opts->{set});
+    my $set = $this->_getDbSetName($opts->{set});
 
-	if(my $locked = $this->{locked_dbh}) {
-		my $locked_set = $locked->getSetName;
-		if($locked_set ne $set) {
-			die __PACKAGE__."#lock: attempted to lock the DB Set [$set] but ".
-			"another DB Set [$locked_set] were locked. Unlock old one before locking new one.".
-			" (他の DB Set [$locked_set] でロック中なので DB Set [$set] でロックをすることができません)\n";
-		} else {
-			die __PACKAGE__."#lock: you are already locking some tables.".
-			" (既に他のテーブルをロック中です)\n";
-		}
-	}
+    if (my $locked = $this->{locked_dbh}) {
+        my $locked_set = $locked->getSetName;
+        if ($locked_set eq $set) {
+            die __PACKAGE__."#lock: you are already locking some tables.".
+            " (既に他のテーブルをロック中です)\n";
+        }
+        else {
+            die __PACKAGE__."#lock: attempted to lock the DB Set [$set] but ".
+            "another DB Set [$locked_set] were locked. Unlock old one before locking new one.".
+            " (他の DB Set [$locked_set] でロック中なので DB Set [$set] でロックをすることができません)\n";
+        }
+    }
 
-	my $dbh = $this->{dbh}{$set};
-	my $type = $dbh->{type} or die __PACKAGE__."#lock: \$dbh->{type} is undef (接続されていません)";
+    my $dbh = $this->{dbh}{$set};
+    my $sql = $this->__nameQuery(
+                  $dbh->_mk_locking_query(\@tables), $dbh);
 
-	my $sql;
-	if( $type eq 'mysql' )
-	{
-		$sql = 'LOCK TABLES '.join(
-		', ',
-		map {
-			my $table = $_->[0];
-			my $alias = $_->[1];
-			my $type  = $_->[2];
+    my $begintime = [Time::HiRes::gettimeofday()];
 
-			defined $alias ? 
-				sprintf '%s AS %s %s',
-					$this->symquote($table, $opts->{set}),
-					$this->symquote($alias, $opts->{set}),
-					$type : 
-				sprintf '%s %s',
-					$this->symquote($table, $opts->{set}),
-					$type;
-		} @tables);
-	}else
-	{
-		# on pgsql, LOCK [ TABLE ] name [, ...] [ IN lockmode MODE ] [ NOWAIT ]
-		die __PACKAGE__."#lock: DB type [$type] is not supported. (DB type [$type] に対する lock はサポートされていません)\n";
-	}
+    $dbh->{dbh}->do($sql);
+    $dbh->{locked} = 1;
 
-	$sql = $this->__nameQuery($sql, $dbh);
+    my $elapsed = Time::HiRes::tv_interval($begintime);
+    $TL->getDebug->_dbLog(
+        lazy {
+            +{ group   => $this->{group},
+               set     => $dbh->getSetName,
+               db      => $dbh->getGroup,
+               id      => -1,
+               query   => $sql,
+               params  => [],
+               elapsed => $elapsed }
+        });
 
-	my $begintime = [Time::HiRes::gettimeofday()];
-
-	$dbh->{dbh}->do($sql);
-	$dbh->{locked} = 1;
-
-	my $elapsed = Time::HiRes::tv_interval($begintime);
-	$TL->getDebug->_dbLog(sub{
-		group   => $this->{group},
-		set     => $dbh->getSetName,
-		db      => $dbh->getGroup,
-		id      => -1,
-		query   => $sql,
-		params  => [],
-		elapsed => $elapsed,
-	});
-
-	$this->{locked_dbh} = $dbh;
-	$this;
+    $this->{locked_dbh} = $dbh;
+    $this;
 }
 
 sub unlock {
-	my $this = shift;
-	$this->{tx_state}==_TX_STATE_CLOSEWAIT and $this->_closewait_broken();
+    my $this = shift;
 
-	my $dbh = $this->{locked_dbh};
-	if(!defined($dbh)) {
-		die __PACKAGE__."#unlock: no tables are locked. (ロックされているテーブルはありません)\n";
-	}
-	my $type = $dbh->{type} or die __PACKAGE__."#lock: \$dbh->{type} is undef (接続されていません)";
+    if ($_tx_state == _TX_STATE_CLOSEWAIT) {
+        $this->_closewait_broken();
+    }
 
-	my $sql;
-	if( $type eq 'mysql' )
-	{
-		$sql = 'UNLOCK TABLES';
-	}else
-	{
-		die __PACKAGE__."#unlock: DB type [$type] is not supported. (DB type [$type] に対する unlock はサポートされていません)\n";
-	}
-	$sql &&= $this->__nameQuery($sql, $dbh);
-	my $begintime = [Time::HiRes::gettimeofday()];
+    my $dbh = $this->{locked_dbh};
+    if (!defined($dbh)) {
+        die __PACKAGE__."#unlock: no tables are locked. (ロックされているテーブルはありません)\n";
+    }
 
-	if( $sql )
-	{
-		$dbh->{dbh}->do($sql);
-	}
-	$dbh->{locked} = undef;
+    my $sql = $this->__nameQuery(
+                  $dbh->_mk_unlocking_query, $dbh);
 
-	my $elapsed = Time::HiRes::tv_interval($begintime);
-	$TL->getDebug->_dbLog(sub{
-		group   => $this->{group},
-		set     => $dbh->getSetName,
-		db      => $dbh->getGroup,
-		id      => -1,
-		query   => $sql,
-		params  => [],
-		elapsed => $elapsed,
-	});
+    my $begintime = [Time::HiRes::gettimeofday()];
 
-	$this->{locked_dbh} = undef;
-	$this;
+    $dbh->{dbh}->do($sql);
+    $dbh->{locked} = undef;
+
+    my $elapsed = Time::HiRes::tv_interval($begintime);
+    $TL->getDebug->_dbLog(
+        lazy {
+            +{ group   => $this->{group},
+               set     => $dbh->getSetName,
+               db      => $dbh->getGroup,
+               id      => -1,
+               query   => $sql,
+               params  => [],
+               elapsed => $elapsed }
+        });
+
+    $this->{locked_dbh} = undef;
+    $this;
 }
 
 sub setBufferSize {
@@ -823,29 +940,37 @@ sub getLastInsertId
 	$dbh->getLastInsertId(@_);
 }
 
+sub quote {
+    my $this    = shift;
+    my $str     = shift;
+    my $setname = shift;
+
+    my $set = $this->_getDbSetName($setname);
+    return $this->{dbh}{$set}->quote($str);
+}
+
 sub symquote {
-	my $this = shift;
-	my $str = shift;
+    my $this    = shift;
+    my $str     = shift;
+    my $setname = shift;
 
-	if(!defined($str)) {
-		die __PACKAGE__."#symquote: arg[1] is not defined. (第1引数が指定されていません)\n";
-	} elsif(ref($str)) {
-		die __PACKAGE__."#symquote: arg[1] is a reference. [$str] (第1引数がリファレンスです)\n";
-	} elsif($str =~ m/[\'\"\`]/) {
-		die __PACKAGE__."#symquote: arg[1] contains a quote character. [$str] (第1引数がquote記号\'\"\`を含んでいます)\n";
-	}
+    my $set = $this->_getDbSetName($setname);
+    return $this->{dbh}{$set}->symquote($str);
+}
 
-	if($this->getType eq 'mysql') {
-		qq[`$str`];
-	} else {
-		qq["$str"];
-	}
+sub escapeLike {
+    my $this    = shift;
+    my $str     = shift;
+    my $setname = shift;
+
+    my $set = $this->_getDbSetName($setname);
+    return $this->{dbh}{$set}->escapeLike($str);
 }
 
 sub getType {
-	my $this = shift;
+    my $this = shift;
 
-	$this->{type};
+    $this->{type};
 }
 
 sub getDbh {
@@ -885,19 +1010,20 @@ sub _getDbSetName {
 }
 
 sub _connect {
-	# クラスメソッド。TL#startCgi，TL#trapErrorのみが呼ぶ。
-	my $class = shift;
-	my $groups = shift;
+    # クラスメソッド。TL#startCgi，TL#trapErrorのみが呼ぶ。
+    my $class = shift;
+    my $groups = shift;
 
-	foreach my $group (@$groups) {
-		if (!defined($group)) {
-			die "TL#startCgi: -DB has an undefined value. (DB指定にundefが含まれます)\n";
-		} elsif(ref($group)) {
-			die "TL#startCgi: -DB has a reference. (DB指定にリファレンスが含まれます)\n";
-		}
+    foreach my $group (@$groups) {
+        if (!defined $group) {
+            die "TL#startCgi: -DB has an undefined value. (DB指定にundefが含まれます)\n";
+        }
+        elsif (ref $group) {
+            die "TL#startCgi: -DB has a reference. (DB指定にリファレンスが含まれます)\n";
+        }
 
-		$INSTANCES->{$group} = $class->_new($group)->connect;
-	}
+        $INSTANCES{$group} = __PACKAGE__->_new($group)->connect;
+    }
 
 	# initRequest, postRequest, term をフックする
 	$TL->setHook(
@@ -926,9 +1052,10 @@ sub _new {
 	my $group = shift;
 
 	my $this = bless {} => $class;
-	$this->{group} = $group;
-	$this->{namequery} = $TL->INI->get($group => 'namequery');
-	$this->{type} = $TL->INI->get($group => 'type');
+	$this->{group}     = $group;
+	$this->{namequery} = $TL->INI->get($group => 'namequery' => undef);
+	$this->{autoreyry} = $TL->INI->get($group => 'autoretry' => undef);
+	$this->{type}      = $TL->INI->get($group => 'type');
 
 	$this->{bufsize} = undef; # 正の値でなければ無制限
 	$this->{types_symtable} = \%Tripletail::DB::SQL_TYPES::;
@@ -940,7 +1067,6 @@ sub _new {
 
 	$this->{locked_dbh}   = undef; # Tripletail::DB::Dbh
 	$this->{trans_dbh}    = undef; # Tripletail::DB::Dbh
-	$this->{tx_state}     = _TX_STATE_NONE;
 
 	do {
 		local $SIG{__DIE__} = 'DEFAULT';
@@ -963,11 +1089,26 @@ sub _new {
 			die __PACKAGE__."#new: DB Set [$setname] has no databases. (DB Set [$setname] にDBが1つもありません)\n";
 		}
 
-		my $dbname = $db[$$ % scalar(@db)];
-		if(!$this->{dbname}{$dbname}) {
-			$this->{dbname}{$dbname} = Tripletail::DB::Dbh->new($setname, $dbname);
-		}
-		$this->{dbh}{$setname} = $this->{dbname}{$dbname};
+        my $dbname = $db[$$ % scalar(@db)];
+        if (!$this->{dbname}{$dbname}) {
+            my $type    = $this->{type};
+            my $backend = exists $BACKEND_OF{$type}
+                               ? $BACKEND_OF{$type}
+                               : die "TL#startCgi: DB type [$type] is not supported.".
+                                 " (DB type [$type] はサポートされていません)\n";
+
+            eval qq{
+                use $backend;
+            };
+            if ($@) {
+                local $SIG{__DIE__} = $@;
+                die $@;
+            }
+
+            my $class = $backend . '::Dbh';
+            $this->{dbname}{$dbname} = $class->new($setname, $dbname);
+        }
+        $this->{dbh}{$setname} = $this->{dbname}{$dbname};
 	}
 
 	$this;
@@ -1002,28 +1143,28 @@ sub __nameQuery {
 }
 
 sub __initRequest {
-	# $INSTANCESの中から、接続が確立していないものを接続する。
-	foreach my $db (values %$INSTANCES) {
+	# %INSTANCESの中から、接続が確立していないものを接続する。
+	foreach my $db (values %INSTANCES) {
 		$db->connect;
 	}
 }
 
 sub __term {
-	# $INSTANCESの接続を切断する。
-	foreach my $db (values %$INSTANCES) {
+	# %INSTANCESの接続を切断する。
+	foreach my $db (values %INSTANCES) {
 		$db->disconnect;
 	}
-	undef $INSTANCES;
+	%INSTANCES = ();
 }
 
 sub __postRequest {
-	# $INSTANCESの中から、lockedのままになっているものに対して
+	# %INSTANCESの中から、lockedのままになっているものに対して
 	# UNLOCK TABLESを実行する。
 	# また、トランザクションが済んでいないものについてはrollbackする。
 
 	# 更にDBセットのデフォルト値を Ini の物にする
 
-	foreach my $db (values %$INSTANCES) {
+	foreach my $db (values %INSTANCES) {
 		if(my $dbh = $db->{locked_dbh}) {
 			$db->unlock;
 
@@ -1047,779 +1188,10 @@ sub __postRequest {
 			);
 		}
 
-		$db->setDefaultSet($TL->INI->get($db->{group} => 'defaultset', undef));
+		$db->setDefaultSet($TL->INI->get($db->{group} => defaultset => undef));
 	}
 }
 
-
-package Tripletail::DB::Dbh;
-use Tripletail;
-
-sub new {
-	my $class = shift;
-	my $setname = shift;
-	my $dbname = shift;
-	my $this = bless {} => $class;
-
-	$this->{setname} = $setname;
-	$this->{inigroup} = $dbname;
-	$this->{dbh} = undef; # DBI-dbh
-	$this->{type} = undef; # set on connect().
-
-	$this;
-}
-
-sub getSetName {
-	my $this = shift;
-
-	$this->{setname};
-}
-
-sub getGroup {
-	my $this = shift;
-
-	$this->{inigroup};
-}
-
-sub getDbh {
-	my $this = shift;
-
-	$this->{dbh};
-}
-
-sub ping {
-	my $this = shift;
-
-	$this->{dbh} and $this->{dbh}->ping;
-}
-
-sub connect {
-	my $this = shift;
-	my $type = shift;
-
-	$type or die __PACKAGE__."#connect: type is not specified. (typeが指定されていません)\n";
-	$this->{type} = $type;
-	if($type eq 'mysql') {
-		my $opts = {
-			dbname => $TL->INI->get($this->{inigroup} => 'dbname'),
-		};
-		if( !$opts->{dbname} )
-		{
-			if( $TL->INI->existsGroup($this->{inigroup}) )
-			{
-				die __PACKAGE__."#connect: dbname is not set. (dbnameが指定されていません)\n";
-			}else
-			{
-				die __PACKAGE__."#connect: inigroup '$this->{inigroup}' does not exist. (inigroup '$this->{inigroup}' が存在しません)\n";
-			}
-		}
-
-		my $host = $TL->INI->get($this->{inigroup} => 'host');
-		if(defined($host)) {
-			$opts->{host} = $host;
-		}
-
-		my $port = $TL->INI->get($this->{inigroup} => 'port');
-		if(defined($port)) {
-			$opts->{port} = $port;
-		}
-
-		# mysql_read_default_file, mysql_read_default_group オプションを渡す
-		my $default_file = $TL->INI->get_reloc($this->{inigroup} => 'mysql_read_default_file');
-		if(defined($default_file)) {
-			if ( ! -e $default_file ) {
-				die __PACKAGE__."#connect: file $default_file does not exist. ($default_file が存在しません) ('mysql_read_default_file' in [$this->{inigroup}])\n";
-			}
-			$opts->{mysql_read_default_file} = $default_file;
-
-			my $default_group = $TL->INI->get($this->{inigroup} => 'mysql_read_default_group');
-			if(defined($default_group)) {
-				$opts->{mysql_read_default_group} = $default_group;
-			}
-		}
-
-		no warnings 'redefine';
-		$DBI::installed_drh{mysql} or DBI->install_driver('mysql');
-		my $orig = \&DBD::mysql::db::_login;
-		local($Tripletail::Error::LAST_DBH);
-		local(*DBD::mysql::db::_login) = sub{
-			my @ret;
-			@ret = wantarray ? &$orig : scalar(&$orig);
-			if( !$ret[0] )
-			{
-				# $_[0]がdbh.
-				# 保持してしまうとその後のエラーメッセージがでなくなり,
-				# リファレンスではundefに消されてしまうので
-				# ここでエラー情報を作成.
-				my $err = Tripletail::DB->_errinfo($_[0], $type);
-				$Tripletail::Error::LAST_DBH = ['error' => $err];
-			}
-			wantarray ? @ret : $ret[0];
-		};
-
-		$this->{dbh} = DBI->connect(
-			'dbi:mysql:' . join(';', map { "$_=$opts->{$_}" } keys %$opts),
-			$TL->INI->get($this->{inigroup} => 'user'),
-			$TL->INI->get($this->{inigroup} => 'password'), {
-			AutoCommit => 1,
-			PrintError => 0,
-			RaiseError => 1,
-		});
-	} elsif($type eq 'pgsql') {
-		my $opts = {
-			dbname => $TL->INI->get($this->{inigroup} => 'dbname'),
-		};
-		$opts->{dbname} or die __PACKAGE__."#connect: dbname is not set. (dbnameが指定されていません)\n";
-
-		my $host = $TL->INI->get($this->{inigroup} => 'host');
-		if(defined($host) && $host ne '') {
-			$opts->{host} = $host;
-		}
-
-		my $port = $TL->INI->get($this->{inigroup} => 'port');
-		if(defined($port) && $host ne '') {
-			$opts->{port} = $port;
-		}
-
-		$this->{dbh} = DBI->connect(
-			'dbi:Pg:' . join(';', map { "$_=$opts->{$_}" } keys %$opts),
-			$TL->INI->get($this->{inigroup} => 'user'),
-			$TL->INI->get($this->{inigroup} => 'password'), {
-			AutoCommit => 1,
-			PrintError => 0,
-			RaiseError => 1,
-		});
-	} elsif($type eq 'oracle') {
-		$ENV{ORACLE_SID} = $TL->INI->get($this->{inigroup} => 'sid');
-		$ENV{ORACLE_SID} or die __PACKAGE__."#connect: sid is not set. (sidが指定されていません)\n";
-		$ENV{ORACLE_HOME} = $TL->INI->get($this->{inigroup} => 'home');
-		$ENV{ORACLE_HOME} or die __PACKAGE__."#connect: home is not set. (homeが指定されていません)\n";
-		$ENV{ORACLE_TERM} = 'vt100';
-		$ENV{PATH} = $ENV{PATH} . ':' . $ENV{ORACLE_HOME} . '/bin';
-		$ENV{LD_LIBRARY_PATH} = $ENV{LD_LIBRARY_PATH} . ':'
-			. $ENV{ORACLE_HOME} . '/lib';
-		$ENV{ORA_NLS33} = $ENV{ORACLE_HOME} . '/ocommon/nls/admin/data';
-		$ENV{NLS_LANG} = 'JAPANESE_JAPAN.UTF8';
-
-		$TL->INI->get($this->{inigroup} => 'user') or die __PACKAGE__."#connect: user is not set. (userが指定されていません)\n";
-		$TL->INI->get($this->{inigroup} => 'password') or die __PACKAGE__."#connect: password is not set. (passwordが指定されていません)\n";
-		my $option = $TL->INI->get($this->{inigroup} => 'user') . '/' . $TL->INI->get($this->{inigroup} => 'password');
-		my $host = $TL->INI->get($this->{inigroup} => 'host');
-		if(defined($host)) {
-			$option .= '@' . $host;
-		}
-
-		$this->{dbh} = DBI->connect(
-			'dbi:Oracle:',
-			$option,
-			'', {
-			AutoCommit => 1,
-			PrintError => 0,
-			RaiseError => 1,
-		});
-	} elsif($type eq 'interbase') {
-		my $opts = {
-			dbname => $TL->INI->get($this->{inigroup} => 'dbname'),
-			ib_charset => 'UNICODE_FSS',
-		};
-		$opts->{dbname} or die __PACKAGE__."#connect: dbname is not set. (dbnameが指定されていません)\n";
-
-		my $host = $TL->INI->get($this->{inigroup} => 'host');
-		if(defined($host)) {
-			$opts->{host} = $host;
-		}
-
-		my $port = $TL->INI->get($this->{inigroup} => 'port');
-		if(defined($port)) {
-			$opts->{port} = $port;
-		}
-
-		$this->{dbh} = DBI->connect(
-			'dbi:InterBase:' . join(';', map { "$_=$opts->{$_}" } keys %$opts),
-			$TL->INI->get($this->{inigroup} => 'user'),
-			$TL->INI->get($this->{inigroup} => 'password'), {
-			AutoCommit => 1,
-			PrintError => 0,
-			RaiseError => 1,
-		});
-	} elsif($type eq 'sqlite') {
-		my $opts = {
-			dbname => $TL->INI->get_reloc($this->{inigroup} => 'dbname'),
-		};
-		$opts->{dbname} or die __PACKAGE__."#connect: dbname is not set. (dbnameが指定されていません)\n";
-
-		no warnings 'redefine';
-		$DBI::installed_drh{SQLite} or DBI->install_driver('SQLite');
-		my $orig = \&DBD::SQLite::db::_login;
-		local($Tripletail::Error::LAST_DBH);
-		local(*DBD::SQLite::db::_login) = sub{
-			my @ret;
-			@ret = wantarray ? &$orig : scalar(&$orig);
-			if( !$ret[0] )
-			{
-				# $_[0]がdbh.
-				# 保持してしまうとその後のエラーメッセージがでなくなり,
-				# リファレンスではundefに消されてしまうので
-				# ここでエラー情報を作成.
-				my $err = Tripletail::DB->_errinfo($_[0], $type);
-				$Tripletail::Error::LAST_DBH = ['error' => $err];
-			}
-			wantarray ? @ret : $ret[0];
-		};
-
-		$this->{dbh} = DBI->connect(
-			'dbi:SQLite:' . join(';', map { "$_=$opts->{$_}" } keys %$opts),
-			$TL->INI->get($this->{inigroup} => 'user'),
-			$TL->INI->get($this->{inigroup} => 'password'), {
-			AutoCommit => 1,
-			PrintError => 0,
-			RaiseError => 1,
-		});
-	} elsif($type eq 'mssql' || $type eq 'odbc' ) {
-		my $nl = $Tripletail::_CHKNONLAZY || 0;
-		my $dl = $Tripletail::_CHKDYNALDR || 0;
-		my $opts = {
-			map{ $_ => $TL->INI->get($this->{inigroup} => $_) }
-				qw(dbname host port tdsname odbcdsn odbcdriver),
-				qw(bindconvert fetchconvert)
-		};
-		$opts->{dbname} or die __PACKAGE__."#connect: dbname is not set. (dbnameが指定されていません)\n";
-
-		# build data source string.
-		my $dsn;
-		if( $opts->{odbcdsn} )
-		{
-			my $odbcdsn = $opts->{odbcdsn} || '';
-			if( $odbcdsn =~ m/^(\w+)$/ )
-			{
-				$dsn = "dbi:ODBC:DSN=$odbcdsn";
-			}elsif( $odbcdsn =~ /^Driver=|^DSN=/i )
-			{
-				$dsn = "dbi:ODBC:$odbcdsn";
-			}elsif( $odbcdsn =~ /^dbi:/ )
-			{
-				$dsn = $odbcdsn;
-			}else
-			{
-				die __PACKAGE__."#connect: unknown odbcdsn. (対応していないodbcdsnが指定されました)\n";
-			}
-		}
-		# odbc driver.
-		if( !$dsn || $dsn!~/[:;]Driver=/i || $opts->{odbcdriver} )
-		{
-			my $driver = $opts->{odbcdriver};
-			$driver ||= $^O eq 'MSWin32' ? 'SQL Server' : 'freetdsdriver';
-			if( !$dsn )
-			{
-				$dsn = "dbi:ODBC:DRIVER={$driver}";
-			}else
-			{
-				$dsn .= ";DRIVER={$driver}";
-			}
-		}
-		$opts->{tdsname} and $dsn .= ";Servername=$opts->{tdsname}";
-		$opts->{host}    and $dsn .= ";Server=$opts->{host}";
-		$opts->{port}    and $dsn .= ";Port=$opts->{port}";
-		$opts->{dbname}  and $dsn .= ";Database=$opts->{dbname}";
-		
-		# bindconvert/fetchconvert from driver.
-		my $odbc_driver = $dsn =~ /[:;]DRIVER=\{(.*?)\}/i ? lc($1) : '';
-		if( $odbc_driver eq 'freetdsdriver' )
-		{
-			$opts->{bindconvert} ||= 'freetds';
-		}elsif( $odbc_driver eq 'sql server' )
-		{
-			local($SIG{__DIE__},$@) = 'DEFAULT';
-			my $codepage = eval{
-				require Win32::API;
-				my $get_acp   = Win32::API->new("kernel32", "GetACP",   "", "N");
-				$get_acp && $get_acp->Call();
-			} || 0;
-			if( !$codepage || $codepage==932 )
-			{
-				$opts->{bindconvert}  ||= 'mssql_cp932';
-				$opts->{fetchconvert} ||= 'mssql_cp932';
-				#$dsn .= ';AutoTranslate=No';
-			}
-		}
-		foreach my $key (qw(bindconvert fetchconvert))
-		{
-			$opts->{$key} or next;
-			$opts->{$key} eq 'no' and next;
-			my $sub = $this->can("_${key}_$opts->{$key}");
-			$sub or die __PACKAGE__."#connect: no such $key: $opts->{$key} (${key}が指定されていません)";
-			$this->{$key} = $sub;
-		}
-		
-		#print "dsn = [$dsn]\n";
-		my $conn = sub{
-			$this->{dbh} = DBI->connect(
-				$dsn,
-				$TL->INI->get($this->{inigroup} => 'user'),
-				$TL->INI->get($this->{inigroup} => 'password'),
-				{
-					AutoCommit => 1,
-					PrintError => 0,
-					RaiseError => 1,
-				}
-			);
-		};
-		if( (!$dl && $nl) || $^O eq 'MSWin32' )
-		{
-			$conn->();
-		}else
-		{
-			eval{ $conn->(); };
-			if( $@ )
-			{
-				my $err = $@;
-				chomp $err;
-				$err .= " (perhaps you forgot to set env PERL_DL_NONLAZY=1?)";
-				$err .= " ...propagated";
-				die $err;
-			}
-		}
-		if( $this->{fetchconvert} )
-		{
-			my $sub = $this->{fetchconvert};
-			$this->$sub(undef, connect => undef);
-		}
-	} else {
-		die __PACKAGE__."#connect: DB type [$type] is not supported. (DB type [$type] はサポートされていません)\n";
-	}
-
-	if(!$this->{dbh}) {
-		die __PACKAGE__."#connect: DBI->connect failed. (DBI->connectに失敗しました)\n";
-	}
-
-	$this;
-}
-
-sub getLastInsertId
-{
-	my $this = shift;
-	# $this->{type}はconnect時にセットされる
-	my $type = $this->{type} or die __PACKAGE__."#getLastInsertId: \$this->{type} is undef (接続されていません)";
-	my $obj  = shift; # for sequence on pgsql and oracle?
-	if( $type eq 'mysql' )
-	{
-		return $this->{dbh}{mysql_insertid};
-	}elsif($type eq 'pgsql')
-	{
-		defined($obj) or die __PACKAGE__."#getLastInsertId: $type requires secuence name";
-		my ($curval) = $this->{dbh}->selectrow_array(q{
-			SELECT currval(?)
-		}, undef, $obj);
-		return $curval;
-	}elsif($type eq 'oracle')
-	{
-		$obj =~ /^((?:\w+\.)\w+)$/
-			or die __PACKAGE__."#getLastInsertId: internal error: it is not possible to quote symbols of Oracle.".
-				" (内部エラー:Oracle用のquote処理は未実装です)\n";
-  		my $obj_sym = $1;
-		my ($curval) = $this->{dbh}->selectrow_array(q{
-			SELECT $obj_sym.curval
-			  FROM dual
-		});
-		return $curval;
-	}elsif( $type eq 'sqlite' )
-	{
-		return $this->{dbh}->func('last_insert_rowid');
-	}elsif( $type eq 'mssql' )
-	{
-		my ($curval) = $this->{dbh}->selectrow_array(q{
-			SELECT @@IDENTITY
-		});
-		return $curval;
-	}else
-	{
-		die __PACKAGE__."#getLastInsertId: $type is not supported. (${type}はサポートされていません)";
-	}
-}
-
-sub _bindconvert_freetds
-{
-	my $this = shift;
-	my $ref_sql = shift;
-	my $params  = shift;
-	my $i = -1;
-	foreach my $elm (@$params)
-	{
-		++$i;
-		ref($elm) or next;
-		if( ${$elm->[1]} eq 'SQL_WVARCHAR' )
-		{
-			my $u = $TL->charconv($elm->[0], 'utf8', 'ucs2');
-			$elm->[0] = pack("v*",unpack("n*",$u));
-			$elm->[1] = \'SQL_BINARY';
-			
-			my $l = length($u)/2;
-			my $j = 0;
-			my $repl = "CAST(? AS NVARCHAR($l))";
-			$$ref_sql =~ s{\?}{$j++==$i?$repl:'?'}ge;
-		}
-	}
-}
-
-sub _bindconvert_mssql_cp932
-{
-	my $this = shift;
-	my $ref_sql = shift;
-	my $params  = shift;
-	$$ref_sql = $TL->charconv($$ref_sql, 'utf8' => 'sjis');
-	my $i = -1;
-	foreach my $elm (@$params)
-	{
-		++$i;
-		if( !ref($elm) )
-		{
-			$elm = $TL->charconv($elm, 'utf8', 'sjis');
-		}elsif( ${$elm->[1]} =~ /^SQL_W(?:(?:LONG)?VAR)?CHAR$/ )
-		{
-			my $u = $TL->charconv($elm->[0], 'utf8', 'ucs2');
-			$elm->[0] = pack("v*",unpack("n*",$u));
-			$elm->[1] = \'SQL_BINARY';
-			
-			my $l = length($u)/2;
-			my $j = 0;
-			my $repl = "CAST(? AS NVARCHAR($l))";
-			$$ref_sql =~ s{\?}{$j++==$i?$repl:'?'}ge;
-		}elsif( ${$elm->[1]} =~ /^SQL_(?:(?:LONG)?VAR)?CHAR$/ )
-		{
-			$elm = $TL->charconv($elm, 'utf8', 'sjis');
-		}
-	}
-}
-sub _fetchconvert
-{
-	my $this = shift;
-	if( $this->{fetchconvert} )
-	{
-		my $sub = $this->{fetchconvert};
-		$this->$sub(@_);
-	}
-}
-sub _fetchconvert_mssql_cp932
-{
-	my $this = shift;
-	my $sth  = shift;
-	my $mode = shift;
-	my $obj  = shift;
-	
-	if( $mode eq 'new' )
-	{
-		# obj is [\$sql, \@params];
-		
-		# なんだか先に一回やっとかないとおかしくなる?
-		$this->{dbh}->type_info(1);
-		
-		my $types = $sth->{sth}{TYPE};
-		my $dbh = $sth->{dbh}{dbh};
-		my @types = map{ $dbh->type_info($_)->{TYPE_NAME} } @$types;
-		$sth->{_types} = \@types;
-		$sth->{_name_hash} = {%{$sth->{sth}{NAME_hash}||{}}}; # raw encoded.
-		my @names;
-		while(my($k,$v)=each%{$sth->{_name_hash}})
-		{
-			$names[$v] = $TL->charconv($k, "sjis" => "utf8");
-		}
-		$sth->{_name_arraymap} = \@names;
-		$sth->{_decode_cols} = [];
-	}elsif( $mode eq 'nameArray' )
-	{
-		# obj is arrayref.;
-		@$obj = @{$sth->{sth}{NAME}||[]};
-		foreach my $elm (@$obj)
-		{
-			$elm = lc $TL->charconv($elm, 'cp932' => 'utf8');
-		}
-	}elsif( $mode eq 'nameHash' )
-	{
-		# obj is hashref.
-		foreach my $key (keys %$obj)
-		{
-			my $ukey = lc $TL->charconv($key, 'cp932' => 'utf8');
-			$obj->{$ukey} = delete $obj->{$key};
-		}
-	}elsif( $mode eq 'fetchArray' )
-	{
-		# obj is arrayref.
-		my $i = -1;
-		foreach my $val (@$obj)
-		{
-			++$i;
-			defined($val) or next;
-			my $type = (defined($i) && $sth->{_types}[$i]) || '';
-			if( $type =~ /^n?((long)?var)?char$/ )
-			{
-				if( defined($val) && $val =~ /[^\0-\x7f]/ )
-				{
-					$val = $TL->charconv($val, 'cp932' => 'utf8');
-				}
-			}
-			my $ukey = $sth->{_name_arraymap}[$i] || "\0";
-			if( grep{$_ eq $i || $_ eq $ukey} @{$sth->{_decode_cols}} )
-			{
-				my $bin = pack("v*",unpack("n*",$val));
-				$val = $TL->charconv($bin,"ucs2","utf8");
-			}
-		}
-	}elsif( $mode eq 'fetchHash' )
-	{
-		# obj is hashref.
-		foreach my $key (keys %$obj)
-		{
-			my $ukey = $TL->charconv($key, 'cp932' => 'utf8');
-			my $i = $sth->{_name_hash}{$key}; # raw encoded.
-			my $type = (defined($i) && $sth->{_types}[$i]) || '*';
-			my $val = delete $obj->{$key};
-			if( $type =~ /^n?((long)?var)?char$/ )
-			{
-				if( defined($val) && $val =~ /[^\0-\x7f]/ )
-				{
-					$val = $TL->charconv($val, 'cp932' => 'utf8');
-				}
-			}
-			if( grep{$_ eq $i || $_ eq $ukey} @{$sth->{_decode_cols}} )
-			{
-				my $bin = pack("v*",unpack("n*",$val));
-				$val = $TL->charconv($bin,"ucs2","utf8");
-			}
-			$obj->{$ukey} = $val;
-		}
-	}
-}
-
-sub disconnect {
-	my $this = shift;
-
-	$this->{dbh} and $this->{dbh}->disconnect;
-	$this->{dbh} = undef; # DBI-dbh
-	$this->{type} = undef; # set on connect().
-	$this;
-}
-
-sub begin {
-	my $this = shift;
-
-	$this->{dbh}->begin_work;
-}
-
-sub rollback {
-	my $this = shift;
-
-	$this->{dbh}->rollback;
-}
-
-sub commit {
-	my $this = shift;
-
-	$this->{dbh}->commit;
-}
-
-
-package Tripletail::DB::STH;
-use Tripletail;
-our $STH_ID = 0;
-
-1;
-
-sub new {
-	my $class = shift;
-	my $db = shift;
-	my $dbh = shift;
-	my $sth = shift;
-	my $this = bless {} => $class;
-
-	$this->{db_center} = $db; # Tripletail::DB
-	$this->{dbh} = $dbh; # Tripletail::DB::DBH
-	$this->{sth} = $sth; # native sth
-	$this->{ret} = undef; # last return value
-	$this->{id} = $STH_ID++;
-
-	$this;
-}
-
-sub fetchHash {
-	my $this = shift;
-	my $hash = $this->{sth}->fetchrow_hashref;
-
-	if($hash) {
-		$TL->getDebug->_dbLogData(sub{
-			group   => $this->{group},
-			set     => $this->{set}{name},
-			db      => $this->{dbh}{inigroup},
-			id      => $this->{id},
-			data    => $hash,
-		});
-	}
-	if( $this->{dbh}{fetchconvert} )
-	{
-		my $sub = $this->{dbh}{fetchconvert};
-		$this->{dbh}->$sub($this, fetchHash => $hash);
-	}
-
-
-	if(my $lim = $this->{db_center}{bufsize}) {
-		my $size = 0;
-		foreach(values %$hash) {
-			$size += length;
-		}
-
-		if($size > $lim) {
-			die __PACKAGE__."#fetchHash: buffer size exceeded: size [$size] / limit [$lim] (バッファサイズを超過しました。size [$size] / limit [$lim])\n";
-		}
-	}
-
-	$hash;
-}
-
-sub fetchArray {
-	my $this = shift;
-	my $array = $this->{sth}->fetchrow_arrayref;
-
-	if( $this->{dbh}{fetchconvert} )
-	{
-		my $sub = $this->{dbh}{fetchconvert};
-		$this->{dbh}->$sub($this, fetchArray => $array);
-	}
-	if($array) {
-		$TL->getDebug->_dbLogData(sub{
-			group   => $this->{group},
-			set     => $this->{set}{name},
-			db      => $this->{dbh}{inigroup},
-			id      => $this->{id},
-			data    => $array,
-		});
-	}
-
-	if(my $lim = $this->{db_center}{bufsize}) {
-		my $size = 0;
-		foreach(@$array) {
-			$size += length;
-		}
-
-		if($size > $lim) {
-			die __PACKAGE__."#fetchArray: buffer size exceeded: size [$size] / limit [$lim] (バッファサイズを超過しました。size [$size] / limit [$lim])\n";
-		}
-	}
-
-	$array;
-}
-
-sub ret {
-	my $this = shift;
-	$this->{ret};
-}
-
-sub rows {
-	my $this = shift;
-	$this->{sth}->rows;
-}
-
-sub finish {
-	my $this = shift;
-	$this->{sth}->finish;
-}
-
-sub nameArray {
-	my $this = shift;
-	my $name_lc = $this->{sth}{NAME_lc};
-	if( $name_lc && $this->{dbh}{fetchconvert} )
-	{
-		$name_lc = [@{$this->{sth}{NAME}}]; # start from mixed case.
-		my $sub = $this->{dbh}{fetchconvert};
-		$this->{dbh}->$sub($this, nameArray => $name_lc);
-	}
-	$name_lc;
-}
-
-sub nameHash {
-	my $this = shift;
-	my $name_lc_hash = $this->{sth}{NAME_lc_hash};
-	if( $name_lc_hash && $this->{dbh}{fetchconvert} )
-	{
-		$name_lc_hash = {%{$this->{sth}{NAME_hash}}}; # start from mixed case.
-		my $sub = $this->{dbh}{fetchconvert};
-		$this->{dbh}->$sub($this, nameHash => $name_lc_hash);
-	}
-	$name_lc_hash;
-}
-
-sub _fetchconvert
-{
-	my $this = shift;
-	if( $this->{dbh}{fetchconvert} )
-	{
-		my $sub = $this->{dbh}{fetchconvert};
-		$this->{dbh}->$sub($this, @_);
-	}
-}
-
-package Tripletail::DB::_scope;
-
-# -----------------------------------------------------------------------------
-# Tripletail::DB::_scope->new(sub{ ... });
-# Tripletail::DB::_scope->new(sub{ ... }, { args=>[...] });
-#  create colosing object. it is similar to destructor or finally clause.
-#
-sub new
-{
-	my $pkg  = shift;
-	my $code = shift;
-	my $opts = shift;
-	
-	my $this = bless {}, $pkg;
-	$this->{code}     = $code;
-	$this->{args}     = $opts->{args} || undef;
-	$this->{disabled} = $opts->{disabled};
-	$this;
-}
-
-# -----------------------------------------------------------------------------
-# $obj->raise();
-# $obj->raise({ args => [...] });
-#  invoke scope_finalizer code before it run automatically.
-#
-sub raise
-{
-	my $this = shift;
-	my $opts = shift || {};
-	if( !$this->{disabled} )
-	{
-		my $args = $opts->{args} || $this->{args} || [];
-		$this->{code}->(@$args);
-		$this->{disabled} = 1;
-	}else
-	{
-		return;
-	}
-}
-
-# -----------------------------------------------------------------------------
-# $obj->disable();
-#  disable auto raise.
-#
-sub disable
-{
-	my $this = shift;
-	$this->{disabled} = @_ ? shift : 1;
-	$this;
-}
-
-# -----------------------------------------------------------------------------
-# DESTRUCTOR.
-#  invoke scope_finalizer code.
-#
-sub DESTROY
-{
-	my $this = shift;
-	$this->raise();
-}
-
-# -----------------------------------------------------------------------------
-# End of Module.
-# -----------------------------------------------------------------------------
 __END__
 
 =encoding utf-8
@@ -2129,7 +1501,7 @@ setDefaultSetによってデフォルトが選ばれていない場合には例�
 die した場合にはロールバックされる。
 コードの中で明示的にコミット若しくはロールバックを行うこともできる。
 明示的にコミット若しくはロールバックをした後は、 C<tx> を抜けるまで
-DB 操作は禁止される。 この間の DB 操作は例外を発生させる。 
+DB 操作は禁止される。 この間の DB 操作は例外を発生させる。
 
 =item C<< rollback >>
 
@@ -2258,6 +1630,98 @@ SELECT結果の最初の１行を配列へのリファレンスで返す。
   my $array = $DB->selectRowArray($sql, $param...);
   $TL->log(DBDATA => $array->[0]);
 
+=item C<< upsert >>
+
+  $DB->upsert(
+      'table1',
+      {key1 => 'val1', key2 => 'val2'},  # $keys
+      {val3 => 'val3', val4 => 'val4'}); # $values
+
+  $DB->upsert(
+      'schema1', # スキーマ名
+      'table1',
+      {key1 => 'val1', key2 => 'val2'},  # $keys
+      {val3 => 'val3', val4 => 'val4'}); # $values
+
+  $DB->upsert(
+      \'SET_W_Trans',
+      'table1',
+      {key1 => 'val1', key2 => 'val2'},  # $keys
+      {val3 => 'val3', val4 => 'val4'}); # $values
+
+テーブルの特定の一行に対して UPDATE を実行し、もし該当行が存在しなければ
+INSERT を実行するという処理を、たとえトランザクションの外で行われた場合であってもアトミックに行う。
+
+与えられたテーブル名やスキーマ名は、内部で自動的に L<symquote> した上で SQL 文に埋め込まれる。
+
+C<$keys> はテーブルの一意キー（通常は主キー）からその値へのハッシュテーブル。
+その内容はテーブルの一意キーが渡っているカラムと一致していなければならない。
+つまりこのキー集合によってテーブル上のカラムを常に一意に特定する事ができなければならない。
+
+C<$values> はそれ以外のカラム名からその値へのハッシュテーブルであり、省略も可能。
+上記の例に挙げたコードは、まず次のような UPDATE 文を実行し、
+
+  UPDATE table1
+     SET val3 = 'val3', val4 = 'val4'
+   WHERE key1 = 'val1', key2 = 'val2'
+
+該当する行が存在しなければ次のような INSERT 文を実行する。
+
+  INSERT INTO table1
+              ( key1 ,  key2 ,  val3 ,  val4 )
+       VALUES ('val1', 'val2', 'val3', 'val4')
+
+現在 pgsql のみで利用可能。
+
+
+=item C<< findTables >>
+
+  my $sth = $DB->findTables({
+                set    => 'SET_W_Trans', # 省略可能
+                schema => 'schema',      # 省略可能
+                table  => 'table\\_%'    # 省略可能
+              });
+  while (my $row = $sth->fetchHash) {
+      print $row->{TABLE_NAME}, "\n";
+  }
+
+データベース内に存在するテーブルの一覧を得るための C<Tripletail::DB::Sth> オブジェクトを返す。
+
+スキーマ名やテーブル名に C<< _ >> または C<< % >> 記号が含まれていた場合は、その文字列は
+LIKE 演算子のワイルドカードと見倣される。省略も可能であり、その場合は全てのスキーマ名または全てのテーブル名にマッチする
+C<< '%' >> が指定された場合と同様の結果になる。C<undef> の場合も同様。
+
+このメソッドにより得られた C<Tripletail::DB::Sth> オブジェクトの返す各行は
+C<< DBI->table_info() >> と同等である。詳しくは
+L<http://search.cpan.org/dist/DBI/DBI.pm#table_info> を参照。
+
+
+=item C<< getTableColumns >>
+
+  my $columns_ref = $DB->getTableColumns(\'SET_W_Trans', 'schema', 'table');
+  my $columns_ref = $DB->getTableColumns(\'SET_W_Trans', 'table');
+  my $columns_ref = $DB->getTableColumns('schema', 'table');
+  my $columns_ref = $DB->getTableColumns('table');
+
+  if ($columns_ref) {
+      foreach my $column_ref (@$columns_ref) {
+          printf(
+              "%s :: %s\n",
+              $column_ref->{ COLUMN_NAME },
+              $column_ref->{ TYPE_NAME   });
+      }
+  }
+  else {
+      print "table not found\n";
+  }
+
+テーブルの持つカラムの一覧を、ハッシュリファレンスを要素とする配列リファレンスで返す。
+その要素であるカラム情報は C<< DBI->column_info() >> から得られるものと同等である。
+詳しくは L<http://search.cpan.org/dist/DBI/DBI.pm#column_info> を参照。
+
+指定されたテーブルが存在しない場合、このメソッドは C<undef> を返す。
+
+
 =item C<< lock >>
 
   $DB->lock(set => 'SET_W_Trans', read => ['A', 'B'], write => 'C')
@@ -2298,6 +1762,14 @@ C<UNLOCK TABLES> を実行する。
 このサイズを上回る場合、C<< die >>する。
 C<< 0 >> または C<< undef >> をセットすると、制限が解除される。
 
+=item C<< quote >>
+
+  $DB->quote($literal)
+
+文字列をリテラルとしてクォートする。
+
+通常 C<< 'a b c' >> のようにシングルクオートで文字列が囲まれる。
+
 =item C<< symquote >>
 
   $DB->symquote($sym)
@@ -2305,6 +1777,18 @@ C<< 0 >> または C<< undef >> をセットすると、制限が解除される
 文字列を識別子としてクォートする。
 
 mysql の場合は C<< `a b c` >> となり、それ以外の場合は C<< "a b c" >> となる。
+
+=item C<< escapeLike >>
+
+  $DB->escapeLike($pattern)
+
+与えられた文字列を LIKE 演算子のパターンと見倣して、そのワイルドカード記号をエスケープする。
+エスケープの方法は各データベースエンジンによって異なるが、多くの場合は次の式が成立する。
+
+  $DB->escapeLike('foo') eq 'foo'
+  $DB->escapeLike('f_o') eq 'f\\_o'
+  $DB->escapeLike('f%o') eq 'f\\%o'
+  $DB->escapeLike('f\\') eq 'f\\\\'
 
 =item C<getType>
 
@@ -2331,7 +1815,7 @@ DBセット内のDBハンドルを返す。
 
 =back
 
-=head3 C<Tripletail::DB::STH> メソッド
+=head3 C<Tripletail::DB::Sth> メソッド
 
 =over 4
 
@@ -2393,6 +1877,7 @@ DBセットは、予約済みではない名前であれば任意の名称が使
 
   [DB]
   namequery=1
+  autoretry=1
   type=mysql
   defaultset=SET_R_Trans
   SET_W_Trans=CON_DBW1
@@ -2425,12 +1910,21 @@ DBセットは、予約済みではない名前であれば任意の名称が使
 C<< /* foo.pl:111 [DB.R_Transaction1.DBR1] */ >> のようなコメントを挿入する。
 デフォルトは0。
 
+=item C<< autoretry >>
+
+  autoretry = 1
+
+これを 1 にすると L</"tx"> を用いて実行されたトランザクションがデッドロックにより失敗した場合に自動的にトランザクションを再実行する。
+データベースがデッドロック検出機構を持っていない場合には再実行は行われない。デフォルトは 0。
+
+なお単体の L</"execute"> がデッドロックを起こした場合には、この設定とは無関係に必ず再実行される。
+
 =item C<< type >>
 
   type = mysql
 
 DBの種類を選択する。
-mysql, pgsql, oracle, sqlite, mssql が使用可能。
+mysql, pgsql, oracle, interbase, sqlite, mssql が使用可能。
 必須項目。
 
 =item C<< defaultset >>
@@ -2494,9 +1988,9 @@ mysql_read_default_file 指定時に、設定ファイル中のどのグルー�
 
 =head3 SQL Server 設定
 
-試験的に SQL Server との接続が実装されています. 
+試験的に SQL Server との接続が実装されています.
 DBD::ODBC と, Linux であれば unixODBC + freetds で, Windows であれば
-組み込みの ODBC マネージャで動作します. 
+組み込みの ODBC マネージャで動作します.
 
 設定例:
  

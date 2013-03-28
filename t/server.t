@@ -1,3 +1,4 @@
+# -*- perl -*-
 use strict;
 use warnings;
 use Test::More;
@@ -19,14 +20,14 @@ plan tests => 14;
 
 # -----------------------------------------------------------------------------
 # shortcut.
-# 
+#
 sub check_requires() { &t::test_server::check_requires; }
 sub start_server()   { &t::test_server::start_server; }
 sub raw_request(@)   { &t::test_server::raw_request; }
 
 # -----------------------------------------------------------------------------
 # setup.
-# 
+#
 sub setup
 {
 	my $failmsg = check_requires();
@@ -34,13 +35,13 @@ sub setup
 	{
 		plan skip_all => $failmsg;
 	}
-	
+
 	&start_server;
 }
 
 # -----------------------------------------------------------------------------
 # location.
-# 
+#
 sub test_01_location
 {
 	my $res = raw_request(
@@ -177,23 +178,24 @@ sub test_03_raw_cookie
 
 # -----------------------------------------------------------------------------
 # cookie.
-# 
+#
 sub test_04_cookie
 {
 	{
 		my $res = raw_request(
 			method => 'GET',
+			ini    => {Cookie => {format => 'modern'}},
 			script => q{
 				$TL->startCgi(
 					-main => \&main,
 				);
-				
+
 				sub main {
 					my $c = $TL->getCookie;
-					
+
 					if ($TL->CGI->get('setcookie')) {
 						$c->set(I_AM => $TL->newForm(COOKIE => 'MONSTER'));
-						
+
 						$TL->print('[set]');
 					}
 					else {
@@ -207,7 +209,7 @@ sub test_04_cookie
 		);
 		is $res->content, '[set]', '[cookie] (set)';
 	}
-	
+
 	{
 		my $res = raw_request(
 			method => 'GET',

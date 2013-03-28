@@ -1,26 +1,25 @@
+#!perl
+use strict;
+use warnings;
 use Test::More tests =>
   108
   +2 # trim.
   +4 # existsFile
   ;
 use Test::Exception;
-use strict;
-use warnings;
+use Tripletail qw(/dev/null);
 #use Smart::Comments;
 
-BEGIN {
-    eval q{use Tripletail qw(/dev/null)};
-
+do {
     open my $fh, '>', "include$$.txt";
     print $fh qq{
 <!include:include$$.txt>
 };
     close $fh;
-
-}
+};
 
 END {
-    unlink "tmp$$.ini";
+    unlink "template$$.txt";
     unlink "include$$.txt";
 }
 
@@ -103,7 +102,7 @@ my $TMPL5 = qq{
 };
 
 do {
-    open my $fh, '>', "tmp$$.ini";
+    open my $fh, '>', "template$$.txt";
     print $fh $TMPL;
     close $fh;
 };
@@ -116,7 +115,7 @@ sub trim ($) {
 
 my $t;
 ok($t = $TL->newTemplate, 'newTemplate');
-ok($t = $TL->newTemplate("tmp$$.ini"), 'newTemplate');
+ok($t = $TL->newTemplate("template$$.txt"), 'newTemplate');
 ok($t->setTemplate('<?xml version="1.0" encoding="UTF-8" ?>'), 'setTemplate');
 dies_ok {$t->setTemplate('<!mark:test>')} 'setTemplate die';
 dies_ok {$t->setTemplate('<!begin:test><!end:test><!begin:test><!end:test>')} 'setTemplate die';
@@ -183,7 +182,7 @@ is($t->getHtml, 'test' , 'getHtml');
 is($t->isXHTML, undef , 'isXHTML');
 
 
-ok($t->loadTemplate("tmp$$.ini"), 'loadTemplate');
+ok($t->loadTemplate("template$$.txt"), 'loadTemplate');
 
 is($t->isRoot, 1 , 'isRoot');
 
@@ -194,12 +193,12 @@ dies_ok {$t->loadTemplate(\123)} 'loadTemplate die';
 dies_ok {$t->loadTemplate('./../../../../../../../../dummy.txt')} 'loadTemplate die';
 
 $t = $TL->newTemplate;
-ok($t->loadTemplate("tmp$$.ini"), 'loadTemplate');
+ok($t->loadTemplate("template$$.txt"), 'loadTemplate');
 
 dies_ok {$t->existsFile} 'existsFile die';
 dies_ok {$t->existsFile(\123)} 'existsFile die';
 is($t->existsFile('./../../../../../../../../dummy.txt'), undef, 'existsFile');
-is($t->existsFile("tmp$$.ini"), 1, 'existsFile');
+is($t->existsFile("template$$.txt"), 1, 'existsFile');
 
 my $node;
 dies_ok {$t->node} 'node die';
@@ -287,7 +286,7 @@ is(trim $t->node('FORM')->extForm('FORM')->getHtml, trim qq{
 
 
 dies_ok {$t->setTemplate(qq{<!include:include$$.txt>})->toStr} 'include die';
-ok($t->setTemplate(qq{<!include:tmp$$.ini>})->toStr, 'include test');
+ok($t->setTemplate(qq{<!include:template$$.txt>})->toStr, 'include test');
 
 dies_ok {$t->setTemplate(q{<FORM ACTION="" NAME="FORM"></FORM>})->getForm('test')} 'getForm die';
 dies_ok {$t->setTemplate(q{<FORM ACTION="" NAME="FORM"></FORM>})->setForm($form->set(aaa => '333'), 'test')} 'setForm die (no form for name)';

@@ -5,9 +5,8 @@ package Tripletail::Filter::MobileHTML;
 use strict;
 use warnings;
 use Tripletail;
-require Unicode::Japanese;
-require Tripletail::Filter::HTML;
-our @ISA = qw(Tripletail::Filter::HTML);
+use Unicode::Japanese ();
+use base 'Tripletail::Filter::HTML';
 
 # Tripletail::Filter::MobileHTMLは、
 # * 文字コードの変換をする

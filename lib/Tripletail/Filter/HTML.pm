@@ -2,11 +2,12 @@
 # Tripletail::Filter::HTML - 通常HTML用出力フィルタ
 # -----------------------------------------------------------------------------
 package Tripletail::Filter::HTML;
+use base 'Tripletail::Filter::Cookie';
 use strict;
 use warnings;
+use List::MoreUtils qw(any);
 use Tripletail;
-require Tripletail::Filter;
-our @ISA = qw(Tripletail::Filter);
+use Tripletail::CharConv;
 
 # Tripletail::Filter::HTMLは、
 # * 文字コードの変換をする
@@ -42,7 +43,6 @@ sub _new {
 		[charset      => 'Shift_JIS'],
 		[contenttype  => sub {
 			# 動的に決まるのでCODE Refを渡す。引数は取らない。
-			require Tripletail::CharConv;
 			sprintf 'text/html; charset=%s', $this->{option}{charset};
 		}],
 		[type         => 'html'],
@@ -87,6 +87,10 @@ sub print {
 		die __PACKAGE__."#print: \$TL->print() must not be called after calling \$TL->location(). (location後にprintすることは出来ません)\n";
 	}
 
+	if( utf8::is_utf8($data) )
+	{
+		utf8::encode($data);
+	}
 	$data = $this->{buffer} . $data;
 	$this->{buffer} = '';
 	if($data =~ s/(<[^>]+)$//) {
@@ -153,33 +157,18 @@ sub _location {
 }
 
 sub _make_header {
-	my $this = shift;
+    my $this        = shift;
+    my $headers_ref = $this->SUPER::_make_header();
 
-	if(defined(&Tripletail::Session::_getInstance)){
-		# Tripletail::Sessionが有効になっているので、データが有れば、それをクッキーに加える。
-		foreach my $group (Tripletail::Session->_getInstanceGroups) {
-			Tripletail::Session->_getInstance($group)->_setSessionDataToCookies;
-		}
-	}
+    if (defined $this->{locationurl}) {
+        if (!$TL->getDebug->{location_debug}) {
+            # relinkした上でLocationを生成。
+            $headers_ref->{Location}
+              = $this->_relink(url => $this->{locationurl});
+        }
+    }
 
-	require Tripletail::RawCookie;
-	require Tripletail::Cookie;
-
-	my %opts = ();
-	if(defined $this->{locationurl}) {
-		if(!$TL->getDebug->{location_debug}) {
-			# relinkした上でLocationを生成。
-			%opts = (Location => $this->_relink(url => $this->{locationurl}));
-		}
-	}
-	
-	return {
-		%opts,
-		'Set-Cookie' => [
-			Tripletail::Cookie->_makeSetCookies,
-			Tripletail::RawCookie->_makeSetCookies,
-		],
-	};
+    return $headers_ref;
 }
 
 sub _relink_html {
@@ -245,6 +234,12 @@ sub _relink_html {
 				}
 				foreach my $key ($this->{save}->getKeys) {
 					foreach my $value ($this->{save}->getValues($key)) {
+						# Sessionが有効になっている場合は、httpスキームのフォームへはhttpsモードのセッション値をパラメータから除外する
+						if($link_unescaped =~ /^http:\/\// && defined(&Tripletail::Session::_getInstance)) {
+							my @instance_groups = Tripletail::Session->_getInstanceGroups();
+							next if (any {$key eq 'SIDS'.$_} @instance_groups);
+						}
+						
 						my $e = $context->newElement('input');
 						$e->attr(type  => 'hidden');
 						$e->attr(name  => $TL->escapeTag($key));
@@ -388,6 +383,13 @@ sub _relink {
 			# 元のURLにクエリが付いていないなら、ここで付ける。
 			(my $add = $cache->[$onlyascii]) =~ s/\&//;
 			$url .= '?' . $add;
+		}
+		# Sessionが有効になっている場合は、httpスキームのURLへはhttpsモードのセッション値をパラメータから除外する
+		if( $url =~ /^http:\/\// && defined(&Tripletail::Session::_getInstance)) {
+			foreach my $group (Tripletail::Session->_getInstanceGroups) {
+				my $sids_reg = qr{SIDS($group)=\d+(\.)\d+(&*)};
+				$url =~ s/$sids_reg//;
+			}
 		}
 	} elsif($type == 0) {
 		# 弄ってはならないリンク

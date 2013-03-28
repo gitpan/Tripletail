@@ -1,3 +1,4 @@
+# -*- perl -*-
 use strict;
 use warnings;
 use Test::More;
@@ -40,10 +41,6 @@ sub setup
 	{
 		plan skip_all => $failmsg;
 	}
-	if( !$ENV{PGSQL_DBNAME} )
-	{
-		plan skip_all => "no PGSQL_DBNAME";
-	}
 	
 	eval{ require DBD::Pg; };
 	$@ and plan skip_all => "no DBD::Pg";
@@ -52,7 +49,6 @@ sub setup
 	&start_server;
 	
 	# ini.
-	my ($name) = getpwuid($<);
 	my $ini = {
 		DB => {
 			type    => 'pgsql',
@@ -61,8 +57,8 @@ sub setup
 		},
 		DBRW1 => {
 			host     => $ENV{PGSQL_HOST}   || '',
-			dbname   => $ENV{PGSQL_DBNAME} || '',
-			user     => $ENV{PGSQL_USER}   || '',
+			dbname   => $ENV{PGSQL_DBNAME} || 'test',
+			user     => $ENV{PGSQL_USER}   || 'postgres',
 			password => $ENV{PGSQL_PASS},
 		},
 		Session => {
@@ -73,10 +69,6 @@ sub setup
 			csrfkey      => 'TripletaiL_Key',
 		},
 	};
-	t::test_server::add_cleanup(sub{
-		unlink('test.session.sqlite');
-	});
-
 	
 	# check db connection.
 	my $ver = eval
@@ -103,6 +95,24 @@ sub setup
 	$ver &&= $ver->[0];
 	diag("$ver"); # "PostgreSQL 8.3.5 on x86_64-unknown-linux-gnu, ..."
 
+    # セッションテーブルを作成する。THINKME: PostgreSQL 9.1 以降では必
+    # 要ない。詳しくは Tripletail::Session::PgSQL のソースコードを参照。
+    rget q{ $TL->getDB->execute(q{
+                DROP TABLE IF EXISTS "TripletaiL_Session_Test"});
+            $TL->getDB->execute(q{
+                CREATE TABLE "TripletaiL_Session_Test" (
+                    sid         BIGSERIAL NOT NULL,
+                    checkval    BIGINT    NOT NULL,
+                    checkvalssl BIGINT    NOT NULL,
+                    data        BIGINT,
+                    updatetime  TIMESTAMP NOT NULL,
+
+                    PRIMARY KEY (sid)
+                )});
+            $TL->getDB->execute(q{
+                CREATE INDEX "TripletaiL_Session_Test_idx"
+                    ON "TripletaiL_Session_Test" (updatetime)});
+            1; };
 }
 
 # -----------------------------------------------------------------------------
@@ -276,7 +286,7 @@ sub teardown
 	is rget q{
 			my $DB = $TL->getDB();
 			$DB->execute(q{
-				DROP TABLE TripletaiL_Session_Test
+				DROP TABLE "TripletaiL_Session_Test"
 			});
 			'ok';
     } => 'ok', '[teardown] drop table';

@@ -2,11 +2,13 @@
 # Tripletail::InputFilter::HTML - 通常HTML向けCGIクエリ読み取り
 # -----------------------------------------------------------------------------
 package Tripletail::InputFilter::HTML;
+use base 'Tripletail::InputFilter';
 use strict;
 use warnings;
+use File::Path ();
+use IO::Scalar ();
 use Tripletail;
-require Tripletail::InputFilter;
-our @ISA = qw(Tripletail::InputFilter);
+
 my $TEMPFILE_COUNTER = 0;
 
 1;
@@ -278,7 +280,7 @@ sub __pairsFromMultipart {
 		$1;
 	};
 
-	my $tempdir = $TL->INI->get(TL => 'tempdir');
+	my $tempdir = $TL->INI->get(TL => tempdir => undef);
 	if( defined($tempdir) )
 	{
 		# trust TL.tempdir parameter.
@@ -287,7 +289,6 @@ sub __pairsFromMultipart {
 	my $new_ih = sub {
 		if (defined $tempdir) {
 			if (!-d $tempdir) {
-				require File::Path;
 				File::Path::mkpath($tempdir);
 			}
 			
@@ -303,8 +304,6 @@ sub __pairsFromMultipart {
 			$fh;
 		}
 		else {
-			require IO::Scalar;
-
 			IO::Scalar->new;
 		}
 	};

@@ -5,8 +5,8 @@ package Tripletail::Filter::CSV;
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::Filter;
-our @ISA = qw(Tripletail::Filter);
+use Tripletail::CharConv;
+use base 'Tripletail::Filter::Cookie';
 
 # オプション一覧:
 # * charset     => 出力の文字コード。(UTF-8から変換される)
@@ -30,7 +30,6 @@ sub _new {
 		[charset     => 'Shift_JIS'],
 		[contenttype => sub {
 			# 動的に決まるのでCODE Refを渡す。引数は取らない。
-			require Tripletail::CharConv;
 
 			my $ctype;
 			$ctype = sprintf 'text/csv; charset=%s', $this->{option}{charset};

@@ -4,7 +4,7 @@
 package Tripletail::Debug;
 use strict;
 use warnings;
-use UNIVERSAL qw(isa);
+use Data::Dumper ();
 use Tripletail;
 
 sub _INIT_HOOK_PRIORITY() { 1_000_000_000 }; # 順序は問わない。
@@ -32,7 +32,7 @@ sub __new {
 	my $this = bless {} => $class;
 
 	$this->{group} = defined $group ? $group : 'Debug';
-	$this->{enabled} = $TL->INI->get($this->{group} => 'enable_debug');
+	$this->{enabled} = $TL->INI->get($this->{group} => enable_debug => undef);
 	$this->{popup_type} = $TL->INI->get($this->{group} => 'popup_type', 'none');
 
 	$this->{warn_logging} = $TL->INI->get($this->{group} => 'warn_logging', 1);
@@ -89,7 +89,7 @@ sub __new {
 			$SIG{__WARN__} = sub {
 				my $msg = shift;
 
-				isa($msg, 'Tripletail::Error') or $msg = $TL->newError(warn => $msg);
+				Tripletail::_isa($msg, 'Tripletail::Error') or $msg = $TL->newError(warn => $msg);
 
 				if($this->{warn_logging}) {
 					$TL->_log(__PACKAGE__, "Warn: $msg");
@@ -256,27 +256,14 @@ sub _templateLog {
 
 #--------- Tripletail::DB専用
 sub _dbLog {
-	my $this = shift;
+    my $this = shift;
+    my $opts = shift;
 
-	if (!$this->{enabled}
-	|| (!$this->{db_popup} && !$this->{db_logging})
-	|| !$this->{db_log}) {
-		return $this;
-	}
-	
-	my $opts;
-	if( @_ && UNIVERSAL::isa($_[0], 'CODE') )
-	{
-		my $coderef = shift;
-		$opts = { $coderef->(@_) };
-	}else
-	{
-		$opts = { @_ };
-	}
-	local($@);
-	
-	eval 'require Data::Dumper';
-	$@ and die $@;
+    if (!$this->{enabled}
+    || (!$this->{db_popup} && !$this->{db_logging})
+    || !$this->{db_log}) {
+        return $this;
+    }
 
 	# パラメータはData::Dumperでのダンプを保存しておく。
 	my $params_dump = Data::Dumper->new([$opts->{params}])
@@ -325,25 +312,16 @@ sub _dbLog {
 }
 
 sub _dbLogData {
-	my $this = shift;
+    my $this = shift;
+    my $opts = shift;
 
-	if (!$this->{enabled}
-	|| (!$this->{db_popup} && !$this->{db_logging})
-	|| !$this->{db_log}
-	|| ($this->{db_logging_level} <= 1)) {
-		return $this;
-	}
+    if (!$this->{enabled}
+    || (!$this->{db_popup} && !$this->{db_logging})
+    || !$this->{db_log}
+    || ($this->{db_logging_level} <= 1)) {
+        return $this;
+    }
 
-	my $opts;
-	if( @_ && UNIVERSAL::isa($_[0], 'CODE') )
-	{
-		my $coderef = shift;
-		$opts = { $coderef->(@_) };
-	}else
-	{
-		$opts = { @_ };
-	}
-	
 	my $dump;
 	my $data;
 	if(ref($opts->{data}) eq 'ARRAY') {

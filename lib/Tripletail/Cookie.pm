@@ -4,86 +4,132 @@
 package Tripletail::Cookie;
 use strict;
 use warnings;
+use Digest::SHA qw(sha256);
 use Tripletail;
-require Tripletail::RawCookie;
-our @ISA = qw(Tripletail::RawCookie);
+use base 'Tripletail::RawCookie';
 
 sub _POST_REQUEST_HOOK_PRIORITY() { -3_000_000 } # 順序は問わない
 
-our $_INSTANCES = {}; # group => Tripletail::Cookie
+my %_INSTANCES; # group => Tripletail::Cookie
 
 1;
 
 sub _getInstance {
-	my $class = shift;
-	my $group = shift;
+    my $class = shift;
+    my $group = shift;
 
-	if(!defined($group)) {
-		$group = 'Cookie';
-	}
+    if (!defined $group) {
+        $group = 'Cookie';
+    }
 
-	my $obj = $_INSTANCES->{$group};
-	if($obj) {
-		return $obj;
-	}
+    if (my $obj = $_INSTANCES{$group}) {
+        return $obj;
+    }
 
-	$obj = $_INSTANCES->{$group} = $class->__new($group);
+    my $obj = $_INSTANCES{$group} = $class->__new($group);
 
-	# postRequestフックに、保存されているインスタンスを削除する関数を
-	# インストールする。そうしなければFCGIモードで過去のリクエストのクッキーが
-	# いつまでも残る。
-	$TL->setHook(
-		'postRequest',
-		_POST_REQUEST_HOOK_PRIORITY,
-		sub {
-			if(%$_INSTANCES) {
-				%$_INSTANCES = ();
-				#$TL->log('Tripletail::Cookie' => 'Deleted cookie object made in this request.');
-			}
-		},
-	);
+    # postRequestフックに、保存されているインスタンスを削除する関数を
+    # インストールする。そうしなければFCGIモードで過去のリクエストのクッキーが
+    # いつまでも残る。
+    $TL->setHook(
+        'postRequest',
+        _POST_REQUEST_HOOK_PRIORITY,
+        sub {
+            %_INSTANCES = ();
+        },
+       );
 
-	$obj;
+    return $obj;
+}
+
+use fields qw(serializer);
+sub __new {
+    my $class = shift;
+
+    my Tripletail::Cookie $this = fields::new($class);
+    $this->SUPER::__new(@_);
+
+    my $format    = $TL->INI->get($this->{group} => format    => undef);
+    my $cryptokey = $TL->INI->get($this->{group} => cryptokey => undef);
+
+    $this->{serializer} = do {
+        if (defined $cryptokey) {
+            if (!defined $format || $format eq 'modern') {
+                $TL->newSerializer({-type => 'compat'})
+                   ->setCryptoKey(sha256($cryptokey));
+            }
+            else {
+                die sprintf(
+                      qq{%s: %s/format is set to `%s' which do not support }.
+                      qq{encryption. Use `modern' instead, or just omit it.\n},
+                      $TL->INI->_filename, $this->{group}, $format);
+            }
+        }
+        else {
+            if (!defined $format || $format eq 'legacy') {
+                $TL->newSerializer({-type => 'legacy'});
+            }
+            elsif ($format eq 'modern') {
+                $TL->newSerializer({-type => 'compat'});
+            }
+            else {
+                die sprintf(
+                      qq{%s: %s/format is set to `%s' which is unknown to the }.
+                      qq{current version of Tripletail.\n},
+                      $TL->INI->_filename, $this->{group}, $format);
+            }
+        }
+    };
+
+    return $this;
 }
 
 sub get {
-	my $this = shift;
-	my $name = shift;
+    my Tripletail::Cookie $this = shift;
+    my                    $name = shift;
 
-	my $raw = $this->SUPER::get($name);
-	if(defined($raw)) {
-		$TL->newForm->_thaw($raw);
-	} else {
-		$TL->newForm;
-	}
+    if (defined(my $raw = $this->SUPER::get($name))) {
+        my $form = $TL->eval(sub {
+                                 $TL->newForm(
+                                     $this->{serializer}->deserialize($raw));
+                             });
+        if ($@) {
+            $TL->log(__PACKAGE__,
+                     sprintf(
+                         q{Warning: Ignoring unparsable cookie: %s=%s: %s},
+                         $name, $raw, $@));
+            return $TL->newForm();
+        }
+        else {
+            return $form;
+        }
+    }
+    else {
+        return $TL->newForm();
+    }
 }
 
 sub set {
-	my $this = shift;
-	my $name = shift;
-	my $form = shift;
+    my Tripletail::Cookie $this = shift;
+    my                    $name = shift;
+    my Tripletail::Form   $form = shift;
 
-	if(!defined($form)) {
-		die __PACKAGE__."#set: arg[2] is not defined. (第2引数が指定されていません)\n";
-	} elsif(ref($form) ne 'Tripletail::Form') {
-		die __PACKAGE__."#set: arg[2] is not an instance of Tripletail::Form. (第2引数がFormオブジェクトではありません)\n";
-	}
+    if (!defined($form)) {
+        die __PACKAGE__."#set: arg[2] is not defined. (第2引数が指定されていません)\n";
+    }
+    elsif (!Tripletail::_isa($form, 'Tripletail::Form')) {
+        die __PACKAGE__."#set: arg[2] is not an instance of Tripletail::Form.".
+          " (第2引数がFormオブジェクトではありません)\n";
+    }
 
-	my $raw = $form->_freeze;
-	$this->SUPER::set($name => $raw);
+    my $raw = $this->{serializer}->serialize($form->toHash());
+    return $this->SUPER::set($name => $raw);
 }
 
 sub _makeSetCookies {
-	# Set-Cookie:の値として使えるようにクッキーを文字列化するクラスメソッド。
-	# 結果は配列で返される。
-	my $class = shift;
-	my @result;
-
-	foreach my $this (values %$_INSTANCES) {
-		push @result, $this->__makeSetCookie;
-	}
-
-	@result;
+    # Set-Cookie:の値として使えるようにクッキーを文字列化するクラスメソッド。
+    # 結果は配列で返される。
+    return map { $_->__makeSetCookie } values %_INSTANCES;
 }
 
 __END__
@@ -163,6 +209,26 @@ L<Tripletail::Form> クラスのインスタンスの内容を、指定された
 =head2 Ini パラメータ
 
 =over 4
+
+=item format
+
+  format = modern
+
+生成されるクッキーの形式を指定する。C<legacy> と C<modern> から選択可能であり、後述の
+C<cryptokey> が存在すればデフォルトが C<modern> に、存在すれば C<legacy> になる。
+
+C<modern> は AES によるクッキーの暗号化や ZLIB
+による圧縮、Adler-32 チェックサムによる誤り検出にも対応した非常にコンパクトな形式であるが、この形式で生成されたクッキーは
+L<Tripletail> のバージョン 0.50 以降でなければ読み取る事ができない。
+
+なお C<modern> に設定されている場合であっても、C<legacy> 形式（すなわちバージョン 0.49 以前の形式）のクッキーは読み取り可能である。
+
+=item cryptokey
+
+  cryptokey = Lorem ipsum dolor sit amet, consectetur adipisicing elit
+
+クッキーの暗号化に使用する鍵であり、省略可能。これを指定した場合には
+L</"format"> を C<modern> とするか、もしくは省略しなければならない。
 
 =item path
 

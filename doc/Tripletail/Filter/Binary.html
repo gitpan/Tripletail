@@ -87,8 +87,14 @@ Tripletail::Filter::Binary - 内容に変更を加えない出力フィルタ
 </span></a></h1>
 
 <pre class="pod_verbatim"><code>  $TL-&gt;setContentFilter('Tripletail::Filter::Binary', contenttype =&gt; 'image/png');
+  $TL-&gt;print($TL-&gt;readFile('foo.png'));
   
-  $TL-&gt;print($TL-&gt;readFile('foo.png'));</code></pre>
+  $TL-&gt;setContentFilter(
+      'Tripletail::Filter::Binary',
+      contenttype =&gt; 'application/vnd.ms-excel',
+      filename =&gt; 'abc.xls',
+  );
+  $TL-&gt;print($TL-&gt;readFile('abc.xls'));</code></pre>
 
 
 <hr />
@@ -118,6 +124,20 @@ Tripletail::Filter::Binary - 内容に変更を加えない出力フィルタ
 
 </span>
 </p>
+
+</dd>
+<dt><a id="filename"><span class="pod_lang">filename
+
+</span></a></dt>
+<dd>
+<p>
+<span class="pod_lang">ヘッダで出力するファイル名を指定する。省略可能。
+指定した場合、次のようなヘッダが出力される。
+
+</span>
+</p>
+
+<pre class="pod_verbatim"><code>  Content-Disposition: attachment; filename=&quot;foo.csv&quot;</code></pre>
 
 </dd>
 </dl>
@@ -198,7 +218,7 @@ Tripletail::Filter::Binary - 内容に変更を加えない出力フィルタ
 
 <ul>
 <p>
-<span class="pod_lang">Copyright 2006 YMIRLINK Inc.
+<span class="pod_lang">Copyright 2006-2010 YMIRLINK Inc.
 
 </span>
 </p>
@@ -252,6 +272,7 @@ Tripletail::Filter::Binary - 内容に変更を加えない出力フィルタ
 <li><a href="#X__00">Tripletail::Filter</a></li>
 <li><a href="#addHeader">addHeader</a></li>
 <li><a href="#contenttype">contenttype</a></li>
+<li><a href="#filename">filename</a></li>
 <li><a href="#reset">reset</a></li>
 <li><a href="#setHeader">setHeader</a></li>
 <li><a href="#Xe3X83X95Xe3X82Xa3Xe3X83XabXe3X82XbfXe3X83X91Xe3X83Xa9Xe3X83Xa1Xe3X83XbcXe3X82Xbf">フィルタパラメータ</a></li>

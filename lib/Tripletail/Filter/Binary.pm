@@ -5,8 +5,7 @@ package Tripletail::Filter::Binary;
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::Filter;
-our @ISA = qw(Tripletail::Filter);
+use base 'Tripletail::Filter::Cookie';
 
 # オプション一覧:
 # * contenttype => デフォルト: application/octet-stream
@@ -32,13 +31,13 @@ sub _new {
 	$this->_check_options($check);
 
 	$this->setHeader('Content-Type' => $this->{option}{contenttype});
-	
+
 	if(defined($this->{option}{filename})) {
 		my $filename = $this->{option}{filename};
 		$filename = $TL->charconv($filename, 'UTF-8' => 'Shift_JIS');
 		$this->setHeader('Content-Disposition' => qq{attachment; filename="$filename"});
 	}
-	
+
 	$this;
 }
 

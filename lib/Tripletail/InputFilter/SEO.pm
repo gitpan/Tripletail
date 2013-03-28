@@ -2,11 +2,10 @@
 # Tripletail::InputFilter::SEO - SEO入力フィルタ
 # -----------------------------------------------------------------------------
 package Tripletail::InputFilter::SEO;
+use base 'Tripletail::InputFilter';
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::InputFilter;
-our @ISA = qw(Tripletail::InputFilter);
 
 # このフィルタは次のようなPATH_INFOからフォーム情報を得る。
 # foo.cgi/aaa/100/bbb/200

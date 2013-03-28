@@ -4,14 +4,14 @@
 package Tripletail::Mail;
 use strict;
 use warnings;
+use IO::Scalar ();
 use MIME::Entity;
 use MIME::Body;
-use MIME::Head;
 use MIME::Decoder;
-use MIME::QuotedPrint;
-use MIME::Base64;
-use MIME::Words qw (:all);
+use MIME::Parser;
+use MIME::Words qw(encode_mimeword);
 use Tripletail;
+use Unicode::Japanese ();
 
 our $MAIL_ID_COUNT = 0;
 our $BOUNDARY_COUNT = 0;
@@ -46,8 +46,6 @@ sub _new {
 sub parse {
 	my $this = shift;
 	my $str = shift;
-
-	require MIME::Parser;
 
 	my $parser = MIME::Parser->new;
 	$parser->output_to_core(1);
@@ -116,7 +114,6 @@ sub set {
 
 			my $encoding = $ent->head->mime_attr('Content-Transfer-Encoding');
 			if($encoding) {
-				require IO::Scalar;
 				my $instr = $bodystr;
 				my $in = IO::Scalar->new(\$instr);
 				my $outstr;

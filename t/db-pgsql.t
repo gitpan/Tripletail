@@ -1,4 +1,4 @@
-## ----------------------------------------------------------------------------
+## --------------------------------------------------------------- -*- perl -*-
 #  t/db-pg.t
 # -----------------------------------------------------------------------------
 # Mastering programmed by YAMASHINA Hio
@@ -14,27 +14,27 @@ use Test::Exception;
 
 our %DBINFO;
 BEGIN{
-	%DBINFO = (
-		dbname   => $ENV{PGSQL_DBNAME}  || '',
-		user     => $ENV{PGSQL_USER}    || '',
-		password => $ENV{PGSQL_PASS}    || '',
-		host     => $ENV{PGSQL_HOST}    || '',
-	);
+    %DBINFO = (
+        dbname   => $ENV{PGSQL_DBNAME}  || 'test',
+        user     => $ENV{PGSQL_USER}    || 'postgres',
+        password => $ENV{PGSQL_PASS}    || '',
+        host     => $ENV{PGSQL_HOST}    || '',
+    );
 };
 
 use lib '.';
 use t::make_ini {
-	ini => {
-		TL => {
-			trap => 'none',
-		},
-		DB => {
-			type       => 'pgsql',
-			defaultset => 'DBSET_test',
-			DBSET_test => [qw(DBCONN_test)]
-		},
-		DBCONN_test => \%DBINFO,
-	},
+    ini => {
+        TL => {
+            trap => 'none',
+        },
+        DB => {
+            type       => 'pgsql',
+            defaultset => 'DBSET_test',
+            DBSET_test => [qw(DBCONN_test)]
+        },
+        DBCONN_test => \%DBINFO,
+    }
 };
 use Tripletail $t::make_ini::INI_FILE;
 
@@ -61,14 +61,15 @@ if ($@) {
 # -----------------------------------------------------------------------------
 # test spec.
 # -----------------------------------------------------------------------------
-plan tests => 1+3+25+25+15+5;
+plan tests => 1+3+39+25+15+5+2;
 
 &test_setup; #1.
 &test_getdb; #3.
-&test_misc;  #25.
+&test_misc;  #39.
 &test_tx_transaction; #25.
 &test_old_transaction;  #15.
 &test_locks;  #5.
+test_upsert(); #2.
 
 # -----------------------------------------------------------------------------
 # test setup.
@@ -119,17 +120,69 @@ sub test_misc
 		-main => sub{
 			my $DB = $TL->getDB();
 			isa_ok($TL->getDB(), 'Tripletail::DB', '[misc] getDB');
-			$DB->execute( q{
-				CREATE TEMPORARY TABLE tripletail_test
-				(
-					nval SERIAL  NOT NULL PRIMARY KEY,
-					sval TEXT    NOT NULL
-				)
-			});
-			pass("[misc] create table");
-			$DB->execute(q{SELECT * FROM tripletail_test});
-			pass("[misc] SELECT");
-			
+
+            # quote
+            is($DB->quote(q{a'b}), q{'a''b'}, '[misc] quote');
+
+            # symquote
+            is($DB->symquote(q{a"b}), q{"a""b"}, '[misc] symquote');
+
+            # escapeLike
+            is $DB->escapeLike('foo'), 'foo';
+            is $DB->escapeLike('f_o'), 'f\\_o';
+            is $DB->escapeLike('f%o'), 'f\\%o';
+            is $DB->escapeLike('f\\'), 'f\\\\';
+
+            # create a temporary table
+            $DB->execute( q{
+                CREATE TEMPORARY TABLE tripletail_test
+                (
+                    nval SERIAL  NOT NULL PRIMARY KEY,
+                    sval TEXT    NOT NULL
+                )
+            });
+            pass("[misc] create table");
+            $DB->execute(q{SELECT * FROM tripletail_test});
+            pass("[misc] SELECT");
+
+            # findTables
+            {
+                my $sth = $DB->findTables({
+                              table => 'tripletail\\_test'
+                             });
+                isa_ok $sth, 'Tripletail::DB::Sth';
+
+                my $row = $sth->fetchHash;
+                isa_ok $row, 'HASH';
+                is $row->{TABLE_NAME}, 'tripletail_test';
+
+                my $nonexistent = $sth->fetchHash;
+                is $nonexistent, undef;
+            }
+
+            # getTableColumns
+            {
+                my $cols = $DB->getTableColumns('tripletail_test');
+                isa_ok $cols, 'ARRAY';
+
+                my @reduced
+                  = map {
+                      +{ COLUMN_NAME => $_->{ COLUMN_NAME },
+                         TYPE_NAME   => $_->{ TYPE_NAME   } };
+                    }
+                    @$cols;
+                is_deeply \@reduced, [ { COLUMN_NAME => 'nval'
+                                       , TYPE_NAME   => 'integer'
+                                       }
+                                     , { COLUMN_NAME => 'sval'
+                                       , TYPE_NAME   => 'text'
+                                       }
+                                     ];
+
+                my $nonexistent = $DB->getTableColumns('********');
+                is $nonexistent, undef;
+            }
+
 			# insert values.
 			$DB->execute( q{
 				INSERT
@@ -180,7 +233,19 @@ sub test_misc
 				}, $nval, $sval);
 				pass("[misc] insert ($nval,'$sval').");
 			}
-			
+
+            # upsert
+            $DB->upsert(
+                'tripletail_test',
+                {nval => 99},
+                {sval => 'rambutan'}
+               );
+            $DB->upsert(
+                'tripletail_test',
+                {nval => 99, sval => 'rambutan'},
+                {}
+               );
+
 			# check valus
 			{
 				my $sth = $DB->execute( q{
@@ -194,9 +259,10 @@ sub test_misc
 					[  2, 'orange'     ],
 					[  3, 'cherry'     ],
 					[  4, 'strowberry' ],
-					[ 20, 'plum' ],
-					[ 33, 'melon' ],
-					[ 57, 'lychee' ],
+					[ 20, 'plum'       ],
+					[ 33, 'melon'      ],
+					[ 57, 'lychee'     ],
+                    [ 99, 'rambutan'   ],
 				)
 				{
 					my ($nval, $sval) = @$row;
@@ -392,3 +458,44 @@ sub test_locks
 	);
 }
 
+# -----------------------------------------------------------------------------
+# UPSERT
+# -----------------------------------------------------------------------------
+sub test_upsert {
+    $TL->trapError(
+        -DB   => 'DB',
+        -main => sub {
+            my $DB = $TL->getDB;
+
+            $DB->execute(q{
+                CREATE TEMPORARY TABLE tl_upsert_test (
+                    key1 INTEGER,
+                    key2 INTEGER,
+                    val3 INTEGER,
+
+                    PRIMARY KEY (key1, key2)
+                )
+            });
+
+            $DB->upsert(
+                \'DBSET_test',
+                'tl_upsert_test',
+                {key1 => 0, key2 => 0},
+                {val3 => undef});
+            {
+                my $rows = $DB->selectAllHash(
+                               'SELECT * FROM tl_upsert_test');
+                is_deeply $rows, [ {key1 => 0, key2 => 0, val3 => undef } ];
+            }
+
+            $DB->upsert(
+                'tl_upsert_test',
+                {key1 => 0, key2 => 0},
+                {val3 => undef});
+            {
+                my $rows = $DB->selectAllHash(
+                               'SELECT * FROM tl_upsert_test');
+                is_deeply $rows, [ {key1 => 0, key2 => 0, val3 => undef } ];
+            }
+        });
+}

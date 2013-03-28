@@ -2,11 +2,10 @@
 # Tripletail::Sendmail::Esmtp - Forcast esmtpを使用するメール送信
 # -----------------------------------------------------------------------------
 package Tripletail::Sendmail::Esmtp;
+use base 'Tripletail::Sendmail';
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::Sendmail;
-our @ISA = qw(Tripletail::Sendmail);
 
 1;
 
@@ -17,7 +16,6 @@ sub _new {
 
 	$this->{group} = $group;
 	$this->{dbgroup} = $TL->INI->get($group => 'dbgroup');
-	$this->{dbgroup} or die __PACKAGE__."#new: dbgroup is not defined for the INI group [$group]. (dbgroupが指定されていません)\n";
 
 	$this->{resend} = $TL->INI->get($group => 'resend', 1);
 	$this->{resendlimit} = $TL->INI->get($group => 'resendlimit', '24 hours');

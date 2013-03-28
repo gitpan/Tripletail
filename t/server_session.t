@@ -1,3 +1,4 @@
+# -*- perl -*-
 use strict;
 use warnings;
 use Test::More;
@@ -7,14 +8,17 @@ use Data::Dumper;
 use lib '.';
 use t::test_server;
 
-&setup;
-plan tests => 26;
+setup();
+plan tests => 32;
 
-&test_01_basic;  #8.
-&test_02_info;   #1.
-&test_03_form;   #9.
-&test_04_mobile; #6.
-&teardown;       #1.
+test_01_basic();  #8.
+test_binary();    #2.
+test_csv();       #2.
+test_text();      #2.
+test_02_info();   #1.
+test_03_form();   #9.
+test_04_mobile(); #6.
+teardown();       #1.
 
 # -----------------------------------------------------------------------------
 # shortcut.
@@ -30,6 +34,30 @@ sub rget($)
 		db      => 'DB',
 		session => 'Session',
 	);
+}
+
+sub with_filter($$) {
+    my $main   = shift;
+    my $filter = shift;
+
+    my $script = q{
+        $TL->startCgi(
+            -main    => \&main,
+            -DB      => 'DB',
+            -Session => 'Session'
+           );
+        sub main {
+            $TL->setContentFilter('<&FILTER>');
+            <&MAIN>
+        }
+    };
+    $script =~ s/<&FILTER>/$filter/;
+    $script =~ s/<&MAIN>/$main/;
+
+    return raw_request(
+        method => 'GET',
+        script => $script
+       )->content;
 }
 
 # -----------------------------------------------------------------------------
@@ -151,8 +179,62 @@ sub test_01_basic
 }
 
 # -----------------------------------------------------------------------------
+# binary
+#
+sub test_binary {
+    is with_filter(q{
+           my $s = $TL->getSession;
+           $s->setValue('666');
+           $TL->print($s->getValue);
+         }, 'Tripletail::Filter::Binary')
+      , '666', '[binary] set and get';
+
+    is with_filter(q{
+           my $s = $TL->getSession;
+           $TL->print($s->getValue);
+         }, 'Tripletail::Filter::Binary')
+      , '666', '[binary] get';
+}
+
+# -----------------------------------------------------------------------------
+# csv
+#
+sub test_csv {
+    is with_filter(q{
+           my $s = $TL->getSession;
+           $s->setValue('666');
+           $TL->print([$s->getValue]);
+         }, 'Tripletail::Filter::CSV')
+      , "666\r\n", '[csv] set and get';
+
+    is with_filter(q{
+           my $s = $TL->getSession;
+           $TL->print([$s->getValue]);
+         }, 'Tripletail::Filter::CSV')
+      , "666\r\n", '[csv] get';
+}
+
+# -----------------------------------------------------------------------------
+# text
+#
+sub test_text {
+    is with_filter(q{
+           my $s = $TL->getSession;
+           $s->setValue('666');
+           $TL->print($s->getValue);
+         }, 'Tripletail::Filter::TEXT')
+      , '666', '[text] set and get';
+
+    is with_filter(q{
+           my $s = $TL->getSession;
+           $TL->print($s->getValue);
+         }, 'Tripletail::Filter::TEXT')
+      , '666', '[text] get';
+}
+
+# -----------------------------------------------------------------------------
 # info.
-# 
+#
 sub test_02_info
 {
 	ok( rget q{
@@ -275,7 +357,7 @@ sub test_04_mobile {
                );
             sub main {
                 $TL->setContentFilter('Tripletail::Filter::MobileHTML');
-                
+
                 my $s = $TL->getSession;
                 $s->setValue('123456789');
 
@@ -291,7 +373,7 @@ sub test_04_mobile {
 
     like $html, qr{<a href="link-1"></a>},
       'the link without INT=1 is not rewritten';
-    
+
     like $html, qr{<a href="link-2\?SIDSession=[^"]+"></a>},
       'the link with INT=1 is rewritten';
 
@@ -308,7 +390,7 @@ sub test_04_mobile {
     # フォームから取り出した SID が等しい事を確認。
     $html =~ m{<input type="hidden" name="SIDSession" value="([^"]+)">} or die;
     is $query, "SIDSession=$1", 'the session ID is the same';
-    
+
     # セッションが繋がっているかどうかを確認。
     is raw_request(
         method  => 'GET',
@@ -324,7 +406,7 @@ sub test_04_mobile {
                );
             sub main {
                 $TL->setContentFilter('Tripletail::Filter::MobileHTML');
-                
+
                 my $s = $TL->getSession;
                 $TL->print($s->getValue);
             }
@@ -335,7 +417,7 @@ sub test_04_mobile {
 
 # -----------------------------------------------------------------------------
 # teardown.
-# 
+#
 sub teardown
 {
 	is rget q{

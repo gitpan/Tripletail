@@ -2,11 +2,11 @@
 # Tripletail::InputFilter::Plain - 何もしない
 # -----------------------------------------------------------------------------
 package Tripletail::InputFilter::Plain;
+use base 'Tripletail::InputFilter';
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::InputFilter;
-our @ISA = qw(Tripletail::InputFilter);
+
 my $TEMPFILE_COUNTER = 0;
 
 1;

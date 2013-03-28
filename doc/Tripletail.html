@@ -297,6 +297,11 @@ Tripletail - Tripletail, Framework for Japanese Web Application
 
 </span></a>
 </li>
+<li><a href="#newSerializer">
+<span class="pod_lang"><code class="pod_iseq_C">newSerializer</code>
+
+</span></a>
+</li>
 <li><a href="#newSMIME">
 <span class="pod_lang"><code class="pod_iseq_C">newSMIME</code>
 
@@ -573,15 +578,15 @@ Tripletail - Tripletail, Framework for Japanese Web Application
 </span></a></h2>
 
 <p>
-<span class="pod_lang">Tripletail では、ライブラリの各種設定は <a href="././Tripletail/Ini.html">Ini</a> ファイルに置かれる。
+<span class="pod_lang">Tripletail では、ライブラリの各種設定は <a href="http://search.cpan.org/perldoc/Tripletail::Ini">Ini</a> ファイルに置かれる。
 
 </span>
 </p>
 
 <p>
-<span class="pod_lang">実行が開始されるスクリプトの先頭で、次のように引数として <a href="././Tripletail/Ini.html">Ini</a>
+<span class="pod_lang">実行が開始されるスクリプトの先頭で、次のように引数として <a href="http://search.cpan.org/perldoc/Tripletail::Ini">Ini</a>
 ファイルの位置を渡す。するとグローバル変数 <code class="pod_iseq_C">$TL</code> がエクスポートされる。
-<a href="././Tripletail/Ini.html">Ini</a> ファイル指定は必須である。
+<a href="http://search.cpan.org/perldoc/Tripletail::Ini">Ini</a> ファイル指定は必須である。
 
 </span>
 </p>
@@ -591,7 +596,7 @@ Tripletail - Tripletail, Framework for Japanese Web Application
 <p>
 <span class="pod_lang">他のファイルから <code class="pod_iseq_C">$TL</code> 変数を使う場合は、そのパッケージ内で
 <code class="pod_iseq_C">use Tripletail;</code> のように引数無しで <code class="pod_iseq_C">use</code> する。二度目以降の <code class="pod_iseq_C">use</code> で
-<a href="././Tripletail/Ini.html">Ini</a> ファイルの位置を指定しようとした場合はエラーとなる。
+<a href="http://search.cpan.org/perldoc/Tripletail::Ini">Ini</a> ファイルの位置を指定しようとした場合はエラーとなる。
 
 </span>
 </p>
@@ -770,8 +775,8 @@ Tripletail - Tripletail, Framework for Japanese Web Application
 </span></a></h2>
 
 <p>
-<span class="pod_lang">以下のように、<a href="././Tripletail/InputFilter/MobileHTML.html">Tripletail::InputFilter::MobileHTML</a> 入力フィルタと
-<a href="././Tripletail/Filter/MobileHTML.html">Tripletail::Filter::MobileHTML</a> 出力フィルタを利用することで、
+<span class="pod_lang">以下のように、<a href="http://search.cpan.org/perldoc/Tripletail::InputFilter::MobileHTML">Tripletail::InputFilter::MobileHTML</a> 入力フィルタと
+<a href="http://search.cpan.org/perldoc/Tripletail::Filter::MobileHTML">Tripletail::Filter::MobileHTML</a> 出力フィルタを利用することで、
 携帯絵文字を含めて扱うことができる。
 
 </span>
@@ -973,8 +978,8 @@ servers = localhost:11211
 <span class="pod_lang">FastCGI としてプログラムを動作させるモード。httpd から fcgi スクリプトとして起動
 しようとすると、自動的に選ばれる。このモードではプロセスのメモリ使用量を
 監視し、起動後にある一定の大きさを越えてメモリ使用量が増大すると、メモリリーク
-が発生しているとして自動的に終了する。また、 <a href="././Tripletail/Ini.html">Ini</a> パラメータ付きで
-<code class="pod_iseq_C">use Tripletail</code> したスクリプトファイルや、その <a href="././Tripletail/Ini.html">Ini</a> ファイルの最終更新時刻
+が発生しているとして自動的に終了する。また、 <a href="http://search.cpan.org/perldoc/Tripletail::Ini">Ini</a> パラメータ付きで
+<code class="pod_iseq_C">use Tripletail</code> したスクリプトファイルや、その <a href="http://search.cpan.org/perldoc/Tripletail::Ini">Ini</a> ファイルの最終更新時刻
 も監視し、更新されていたら自動的に終了する。
 
 </span>
@@ -1020,8 +1025,8 @@ CGI モード特有の機能は利用出来ない。
 </span></a></h2>
 
 <p>
-<span class="pod_lang"><a href="#print">$TL-&gt;print</a> や <a href="././Tripletail/Template.html#flush">$template-&gt;flush</a>
-で出力される内容は、 <a href="././Tripletail/Filter.html">Tripletail::Filter</a> によって加工される。出力の先頭に HTTP ヘッダを
+<span class="pod_lang"><a href="#print">$TL-&gt;print</a> や <a href="http://search.cpan.org/perldoc/Tripletail::Template#flush">$template-&gt;flush</a>
+で出力される内容は、 <a href="http://search.cpan.org/perldoc/Tripletail::Filter">Tripletail::Filter</a> によって加工される。出力の先頭に HTTP ヘッダを
 付加するのも出力フィルタである。
 
 </span>
@@ -1033,8 +1038,8 @@ CGI モード特有の機能は利用出来ない。
 </span></a></h2>
 
 <p>
-<span class="pod_lang"><code class="pod_iseq_C">$ENV{QUERY_STRING}</code> その他の CGI のリクエスト情報は、 <a href="././Tripletail/InputFilter.html">Tripletail::InputFilter</a>
-が読み取り、 <a href="././Tripletail/Form.html">Tripletail::Form</a> オブジェクトを生成する。得られたリクエスト情報は
+<span class="pod_lang"><code class="pod_iseq_C">$ENV{QUERY_STRING}</code> その他の CGI のリクエスト情報は、 <a href="http://search.cpan.org/perldoc/Tripletail::InputFilter">Tripletail::InputFilter</a>
+が読み取り、 <a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a> オブジェクトを生成する。得られたリクエスト情報は
 <code class="pod_iseq_C">$CGI</code> オブジェクトか <a href="#CGI">$TL-&gt;CGI</a> メソッドで取得出来る。
 
 </span>
@@ -1213,7 +1218,7 @@ FastCGI の場合は最後の1回だけ呼ばれる。
   $CGI</code></pre>
 
 <p>
-<span class="pod_lang">リクエストを受け取った <a href="././Tripletail/Form.html">Tripletail::Form</a> オブジェクトを返す。
+<span class="pod_lang">リクエストを受け取った <a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a> オブジェクトを返す。
 また、このオブジェクトは startCgi メソッドの呼び出し元パッケージに export される。
 
 </span>
@@ -1317,7 +1322,7 @@ $value は大文字で始まらなければならない。
 </p>
 
 <p>
-<span class="pod_lang">また、出力フィルタが <a href="././Tripletail/Filter/HTML.html">Tripletail::Filter::HTML</a> か <a href="././Tripletail/Filter/MobileHTML.html">Tripletail::Filter::MobileHTML</a>
+<span class="pod_lang">また、出力フィルタが <a href="http://search.cpan.org/perldoc/Tripletail::Filter::HTML">Tripletail::Filter::HTML</a> か <a href="http://search.cpan.org/perldoc/Tripletail::Filter::MobileHTML">Tripletail::Filter::MobileHTML</a>
 の場合のみ利用できる。
 
 </span>
@@ -1568,7 +1573,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 <pre class="pod_verbatim"><code>  $DB = $TL-&gt;getDB($group)</code></pre>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/DB.html">Tripletail::DB</a> オブジェクトを取得。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::DB">Tripletail::DB</a> オブジェクトを取得。
 
 </span>
 </p>
@@ -1581,7 +1586,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 <pre class="pod_verbatim"><code>  $DB = $TL-&gt;newDB($group)</code></pre>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/DB.html">Tripletail::DB</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::DB">Tripletail::DB</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1592,7 +1597,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Form.html">Tripletail::Form</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1603,7 +1608,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Template.html">Tripletail::Template</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Template">Tripletail::Template</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1614,7 +1619,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Session.html">Tripletail::Session</a> オブジェクトを取得。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Session">Tripletail::Session</a> オブジェクトを取得。
 
 </span>
 </p>
@@ -1625,7 +1630,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Validator.html">Tripletail::Validator</a> オブジェクトを生成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Validator">Tripletail::Validator</a> オブジェクトを生成。
 
 </span>
 </p>
@@ -1636,7 +1641,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Value.html">Tripletail::Value</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Value">Tripletail::Value</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1647,7 +1652,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/DateTime.html">Tripletail::DateTime</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::DateTime">Tripletail::DateTime</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1658,7 +1663,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Pager.html">Tripletail::Pager</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Pager">Tripletail::Pager</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1669,7 +1674,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/CSV.html">Tripletail::CSV</a> オブジェクトを取得。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::CSV">Tripletail::CSV</a> オブジェクトを取得。
 
 </span>
 </p>
@@ -1680,7 +1685,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/TagCheck.html">Tripletail::TagCheck</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::TagCheck">Tripletail::TagCheck</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1691,7 +1696,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/HtmlFilter.html">Tripletail::HtmlFilter</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::HtmlFilter">Tripletail::HtmlFilter</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1702,7 +1707,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/HtmlMail.html">Tripletail::HtmlMail</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::HtmlMail">Tripletail::HtmlMail</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1713,7 +1718,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Mail.html">Tripletail::Mail</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Mail">Tripletail::Mail</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1724,7 +1729,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Ini.html">Tripletail::Ini</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Ini">Tripletail::Ini</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1735,7 +1740,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Cookie.html">Tripletail::Cookie</a> オブジェクトを取得。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Cookie">Tripletail::Cookie</a> オブジェクトを取得。
 
 </span>
 </p>
@@ -1746,7 +1751,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/RawCookie.html">Tripletail::RawCookie</a> オブジェクトを取得。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::RawCookie">Tripletail::RawCookie</a> オブジェクトを取得。
 
 </span>
 </p>
@@ -1757,7 +1762,18 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Sendmail.html">Tripletail::Sendmail</a> オブジェクトを作成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Sendmail">Tripletail::Sendmail</a> オブジェクトを作成。
+
+</span>
+</p>
+
+<h4><a id="newSerializer">
+<span class="pod_lang"><code class="pod_iseq_C">newSerializer</code>
+
+</span></a></h4>
+
+<p>
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Serializer">Tripletail::Serializer</a> オブジェクトを作成。
 
 </span>
 </p>
@@ -1779,7 +1795,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/FileSentinel.html">Tripletail::FileSentinel</a> オブジェクトを取得。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::FileSentinel">Tripletail::FileSentinel</a> オブジェクトを取得。
 
 </span>
 </p>
@@ -1790,7 +1806,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/MemorySentinel.html">Tripletail::MemorySentinel</a> オブジェクトを取得。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::MemorySentinel">Tripletail::MemorySentinel</a> オブジェクトを取得。
 
 </span>
 </p>
@@ -1801,7 +1817,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </span></a></h4>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/MemCached.html">Tripletail::MemCached</a> オブジェクトを生成。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::MemCached">Tripletail::MemCached</a> オブジェクトを生成。
 
 </span>
 </p>
@@ -1819,7 +1835,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 <pre class="pod_verbatim"><code>  $TL-&gt;INI</code></pre>
 
 <p>
-<span class="pod_lang"><code class="pod_iseq_C">use Tripletail qw(filename.ini);</code> で読み込まれた <a href="././Tripletail/Ini.html">Tripletail::Ini</a> を返す。
+<span class="pod_lang"><code class="pod_iseq_C">use Tripletail qw(filename.ini);</code> で読み込まれた <a href="http://search.cpan.org/perldoc/Tripletail::Ini">Tripletail::Ini</a> を返す。
 
 </span>
 </p>
@@ -1923,7 +1939,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </p>
 
 <p>
-<span class="pod_lang">返される値は、指定された <a href="././Tripletail/Filter.html">Tripletail::Filter</a> のサブクラスのインスタンスである。
+<span class="pod_lang">返される値は、指定された <a href="http://search.cpan.org/perldoc/Tripletail::Filter">Tripletail::Filter</a> のサブクラスのインスタンスである。
 
 </span>
 </p>
@@ -2037,7 +2053,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 </p>
 
 <p>
-<span class="pod_lang">返される値は、指定された <a href="././Tripletail/InputFilter.html">Tripletail::InputFilter</a> のサブクラスのインスタンスである。
+<span class="pod_lang">返される値は、指定された <a href="http://search.cpan.org/perldoc/Tripletail::InputFilter">Tripletail::InputFilter</a> のサブクラスのインスタンスである。
 
 </span>
 </p>
@@ -2064,7 +2080,7 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 <pre class="pod_verbatim"><code>  $TL-&gt;sendError(title =&gt; &quot;タイトル&quot;, error =&gt; &quot;エラー&quot;)</code></pre>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Ini.html">ini</a> で指定されたアドレスにエラーメールを送る。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Ini">ini</a> で指定されたアドレスにエラーメールを送る。
 設定が無い場合は何もしない。
 
 </span>
@@ -2241,13 +2257,13 @@ die する事が判っている場合に、エラー処理のコストを減ら�
 
 <p>
 <span class="pod_lang"><a href="#printCacheUnlessModified">&quot;printCacheUnlessModified&quot;</a> と <a href="#setCache">&quot;setCache&quot;</a> を利用する際に使用する。
-第1引数で渡された <a href="././Tripletail/Form.html">Tripletail::Form</a> オブジェクトのキーが出力文字列中に存在している場合、値に置換する。
+第1引数で渡された <a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a> オブジェクトのキーが出力文字列中に存在している場合、値に置換する。
 
 </span>
 </p>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Form.html">Tripletail::Form</a>オブジェクトの代わりにハッシュのリファレンスを渡すことも出来る。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a>オブジェクトの代わりにハッシュのリファレンスを渡すことも出来る。
 ハッシュのリファレンスを渡した場合は、$TL-&gt;newForm($hashref) した結果のフォームオブジェクトを追加する。
 
 </span>
@@ -2350,7 +2366,7 @@ printCacheUnlessModified より後で実行する必要がある。
 </p>
 
 <p>
-<span class="pod_lang">第2引数には、<a href="././Tripletail/Filter/MemCached.html">Tripletail::Filter::MemCached</a>への優先度を記述する。省略可能。
+<span class="pod_lang">第2引数には、<a href="http://search.cpan.org/perldoc/Tripletail::Filter::MemCached">Tripletail::Filter::MemCached</a>への優先度を記述する。省略可能。
 デフォルトは1500。
 
 </span>
@@ -2537,7 +2553,7 @@ printCacheUnlessModified より後で実行する必要がある。
 <p>
 <span class="pod_lang">sendErrorや、エラー発生時にメールを送る先を指定する。
 <code class="pod_iseq_C">アカウント名@ドメイン名%inigroup</code> 、の形式で指定する。
-inigroup に  <a href="././Tripletail/Sendmail.html">Tripletail::Sendmail</a> クラスで使用する inigroup を指定する。
+inigroup に  <a href="http://search.cpan.org/perldoc/Tripletail::Sendmail">Tripletail::Sendmail</a> クラスで使用する inigroup を指定する。
 inigroup が省略されると <code class="pod_iseq_C">'Sendmail'</code> が使われる。
 
 </span>
@@ -2554,6 +2570,20 @@ inigroup が省略されると <code class="pod_iseq_C">'Sendmail'</code> が使
 <span class="pod_lang">どのような事象が発生した時に errormail で指定された先にメールを送るか。
 以下の項目をスペース区切りで任意の数だけ指定する。
 デフォルトは 'error memory-leak' である。
+
+</span>
+</p>
+
+</dd>
+<dt><a id="errormail_subject_len"><span class="pod_lang"><code class="pod_iseq_C">errormail_subject_len</code>
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  errormail_subject_len = 80</code></pre>
+
+<p>
+<span class="pod_lang">エラー発生時に送られるメールの表題の最大長。長過ぎるとメール送信に失敗
+する場合がある。デフォルトは 80 バイト。
 
 </span>
 </p>
@@ -2576,7 +2606,7 @@ inigroup が省略されると <code class="pod_iseq_C">'Sendmail'</code> が使
 </span></a></dt>
 <dd>
 <p>
-<span class="pod_lang"><a href="././Tripletail/FileSentinel.html">Tripletail::FileSentinel</a> が監視対象のファイルの更新を検出した時にメールを送る。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::FileSentinel">Tripletail::FileSentinel</a> が監視対象のファイルの更新を検出した時にメールを送る。
 メールの内容には更新されたファイルやその更新時刻が含まれる。
 
 </span>
@@ -2588,7 +2618,7 @@ inigroup が省略されると <code class="pod_iseq_C">'Sendmail'</code> が使
 </span></a></dt>
 <dd>
 <p>
-<span class="pod_lang"><a href="././Tripletail/MemorySentinel.html">Tripletail::MemorySentinel</a> がメモリリークの可能性を検出した時にメールを送る。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::MemorySentinel">Tripletail::MemorySentinel</a> がメモリリークの可能性を検出した時にメールを送る。
 メールの内容にはメモリの使用状況が含まれる。
 
 </span>
@@ -2840,7 +2870,7 @@ inigroup が省略されると <code class="pod_iseq_C">'Sendmail'</code> が使
 </p>
 
 <p>
-<span class="pod_lang"><a href="././Tripletail/Filter/MobileHTML.html">Tripletail::Filter::MobileHTML</a> を利用した場合、<code class="pod_iseq_C">outputbuffering</code> は1にセットされる。
+<span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Filter::MobileHTML">Tripletail::Filter::MobileHTML</a> を利用した場合、<code class="pod_iseq_C">outputbuffering</code> は1にセットされる。
 
 </span>
 </p>
@@ -3355,17 +3385,17 @@ const 化を行わないようにする.
 </span></a></h1>
 
 <dl>
-<dt><a id="X_"><span class="pod_lang"><a href="././Tripletail/Cookie.html">Tripletail::Cookie</a>
+<dt><a id="X_"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Cookie">Tripletail::Cookie</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__00"><span class="pod_lang"><a href="././Tripletail/DB.html">Tripletail::DB</a>
+<dt><a id="X__00"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::DB">Tripletail::DB</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__01"><span class="pod_lang"><a href="././Tripletail/Debug.html">Tripletail::Debug</a>
+<dt><a id="X__01"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Debug">Tripletail::Debug</a>
 
 </span></a></dt>
 <dd>
@@ -3382,62 +3412,62 @@ const 化を行わないようにする.
 </p>
 
 </dd>
-<dt><a id="X__02"><span class="pod_lang"><a href="././Tripletail/Filter.html">Tripletail::Filter</a>
+<dt><a id="X__02"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Filter">Tripletail::Filter</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__03"><span class="pod_lang"><a href="././Tripletail/FileSentinel.html">Tripletail::FileSentinel</a>
+<dt><a id="X__03"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::FileSentinel">Tripletail::FileSentinel</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__04"><span class="pod_lang"><a href="././Tripletail/Form.html">Tripletail::Form</a>
+<dt><a id="X__04"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Form">Tripletail::Form</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__05"><span class="pod_lang"><a href="././Tripletail/HtmlFilter.html">Tripletail::HtmlFilter</a>
+<dt><a id="X__05"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::HtmlFilter">Tripletail::HtmlFilter</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__06"><span class="pod_lang"><a href="././Tripletail/HtmlMail.html">Tripletail::HtmlMail</a>
+<dt><a id="X__06"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::HtmlMail">Tripletail::HtmlMail</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__07"><span class="pod_lang"><a href="././Tripletail/Ini.html">Tripletail::Ini</a>
+<dt><a id="X__07"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Ini">Tripletail::Ini</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__08"><span class="pod_lang"><a href="././Tripletail/InputFilter.html">Tripletail::InputFilter</a>
+<dt><a id="X__08"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::InputFilter">Tripletail::InputFilter</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__09"><span class="pod_lang"><a href="././Tripletail/Mail.html">Tripletail::Mail</a>
+<dt><a id="X__09"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Mail">Tripletail::Mail</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__10"><span class="pod_lang"><a href="././Tripletail/MemorySentinel.html">Tripletail::MemorySentinel</a>
+<dt><a id="X__10"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::MemorySentinel">Tripletail::MemorySentinel</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__11"><span class="pod_lang"><a href="././Tripletail/Pager.html">Tripletail::Pager</a>
+<dt><a id="X__11"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Pager">Tripletail::Pager</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__12"><span class="pod_lang"><a href="././Tripletail/RawCookie.html">Tripletail::RawCookie</a>
+<dt><a id="X__12"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::RawCookie">Tripletail::RawCookie</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__13"><span class="pod_lang"><a href="././Tripletail/Sendmail.html">Tripletail::Sendmail</a>
+<dt><a id="X__13"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Sendmail">Tripletail::Sendmail</a>
 
 </span></a></dt>
 <dd>
@@ -3447,27 +3477,27 @@ const 化を行わないようにする.
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__15"><span class="pod_lang"><a href="././Tripletail/TagCheck.html">Tripletail::TagCheck</a>
+<dt><a id="X__15"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::TagCheck">Tripletail::TagCheck</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__16"><span class="pod_lang"><a href="././Tripletail/Template.html">Tripletail::Template</a>
+<dt><a id="X__16"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Template">Tripletail::Template</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__17"><span class="pod_lang"><a href="././Tripletail/Session.html">Tripletail::Session</a>
+<dt><a id="X__17"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Session">Tripletail::Session</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__18"><span class="pod_lang"><a href="././Tripletail/Value.html">Tripletail::Value</a>
+<dt><a id="X__18"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Value">Tripletail::Value</a>
 
 </span></a></dt>
 <dd>
 </dd>
-<dt><a id="X__19"><span class="pod_lang"><a href="././Tripletail/Validator.html">Tripletail::Validator</a>
+<dt><a id="X__19"><span class="pod_lang"><a href="http://search.cpan.org/perldoc/Tripletail::Validator">Tripletail::Validator</a>
 
 </span></a></dt>
 <dd>
@@ -3579,6 +3609,7 @@ Tripletail - Tripletail, Framework for Japanese Web Application
 <li><a href="#error">error</a></li>
 <li><a href="#errorlog">errorlog</a></li>
 <li><a href="#errormail">errormail</a></li>
+<li><a href="#errormail_subject_len">errormail_subject_len</a></li>
 <li><a href="#errormailtype">errormailtype</a></li>
 <li><a href="#errortemplate">errortemplate</a></li>
 <li><a href="#errortemplatecharset">errortemplatecharset</a></li>
@@ -3625,6 +3656,7 @@ Tripletail - Tripletail, Framework for Japanese Web Application
 <li><a href="#newPager">newPager</a></li>
 <li><a href="#newSMIME">newSMIME</a></li>
 <li><a href="#newSendmail">newSendmail</a></li>
+<li><a href="#newSerializer">newSerializer</a></li>
 <li><a href="#newTagCheck">newTagCheck</a></li>
 <li><a href="#newTemplate">newTemplate</a></li>
 <li><a href="#newValidator">newValidator</a></li>

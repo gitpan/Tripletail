@@ -664,16 +664,17 @@ CODE:
       }
       
       /*
-        while(1)
-        {
-          (s/([\w:\-]+)\s*=\s*"([^\"]*)"//)   ? ($this->attr($1 => $2)) :
-            (s/([\w:\-]+)\s*=\s*([^\s\>]+)//) ? ($this->attr($1 => $2)) :
-              (s~(\w+|/)~~)                   ? ($this->end($1)) :
-                last;
+        while(1) {
+            (s/([\w:\-]+)\s*=\s*"([^"]*)"//)     ? ($this->attr($1 => $2)) :
+              (s/([\w:\-]+)\s*=\s*'([^']*)'//)   ? ($this->attr($1 => $2)) :
+                (s/([\w:\-]+)\s*=\s*([^\s>]+)//) ? ($this->attr($1 => $2)) :
+                  (s~(\w+|/)~~)                  ? ($this->end($1)) :
+                    last;
         }
-        \w* (-:[\w:-]+)?  \s* = \s* " [^\"]*     "
-        \w* (-:[\w:-]+)?  \s* = \s*   [^\s\>]*   
-        ^1  ^2          ^3           ^4       ^5
+        \w* (-:[\w:-]+)?  \s* = \s* " [^"]*   "
+        \w* (-:[\w:-]+)?  \s* = \s* ' [^']*   '
+        \w* (-:[\w:-]+)?  \s* = \s*   [^\s>]*   
+        ^1  ^2          ^3          ^4        ^5
         1:name_start, 2:unary_end, 3:name_end
         4:value_start, 5:value_end
       */
@@ -730,10 +731,11 @@ CODE:
             i = pos_unary_end;
           }
           continue;
-        }else if( str[i]=='"' )
+        }else if( str[i]=='\"' || str[i]=='\'' )
         {
+          const char endmark = str[i];
           pos_value_start = ++i;
-          while( i<len && str[i]!='"' ) ++i;
+          while( i<len && str[i]!=endmark ) ++i;
           if( i>=len )
           { /* unary attr */
             if( pos_unary_end-pos_name_start!=0 )

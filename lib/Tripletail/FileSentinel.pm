@@ -88,8 +88,8 @@ sub _new {
 	}
 
 	$this->autoWatch(
-		$TL->INI->get(FileSentinel => 'autowatch_include'), 
-		$TL->INI->get(FileSentinel => 'autowatch_exclude')
+		$TL->INI->get(FileSentinel => autowatch_include => undef),
+		$TL->INI->get(FileSentinel => autowatch_exclude => undef)
 	);
 
 	$this;

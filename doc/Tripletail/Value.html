@@ -633,11 +633,167 @@ $min、$secは省略でき、省略時は0が使用される。
 
 </span></a></dt>
 <dd>
-<pre class="pod_verbatim"><code>  $bool = $val-&gt;isExistentDay</code></pre>
+<pre class="pod_verbatim"><code>  $bool = $val-&gt;isExistentDay
+  $bool = $val-&gt;isExistentDay(format =&gt; 'YMD',date_delim =&gt; '-')
+  $bool = $val-&gt;isExistentDay(date_delim_optional =&gt; '-')</code></pre>
 
 <p>
 <span class="pod_lang">YYYY-MM-DDで設定された日付が実在するものなら1。
 そうでなければundefを返す。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">引数を省略した場合はYYYY-MM-DDで設定された日付のみチェックする。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">fomrat
+日付フォーマットを指定する。省略可能。
+省略時は'YYYYMMDD'が指定される。
+'YYYYMMDD'
+'YMD'
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">date_delim
+日付区切り文字を指定する。区切り文字は複数指定可能。
+省略時は-が指定される。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">date_delim_optional
+日付区切り文字を指定する。指定した区切り文字と区切り文字なしを対象とする。
+formatは'YYYYMMDD'のみ指定可能。
+date_delimと同時に指定する事は出来ない。
+省略可能。
+
+</span>
+</p>
+
+</dd>
+<dt><a id="isExistentTime"><span class="pod_lang">isExistentTime
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  $bool = $val-&gt;isExistentTime
+  $bool = $val-&gt;isExistentTime(format =&gt; 'HMS',time_delim =&gt; ':')
+  $bool = $val-&gt;isExistentTime(time_delim_optional =&gt; ':')</code></pre>
+
+<p>
+<span class="pod_lang">HH:MM:SSで設定された時刻が実在するものなら1。
+そうでなければundefを返す。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">引数を省略した場合はHH:MM:SSで設定された時刻のみチェックする。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">fomrat
+時刻フォーマットを指定する。省略可能。
+省略時は'HHMMSS'が指定される。
+'HHMMSS'
+'HMS'
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">time_delim
+時刻区切り文字を指定する。区切り文字は複数指定可能。
+省略時は:が指定される。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">time_delim_optional
+時刻区切り文字を指定する。指定した区切り文字と区切り文字なしを対象とする。
+formatは'HHMMSS'のみ指定可能。
+time_delimと同時に指定する事は出来ない。
+省略可能。
+
+</span>
+</p>
+
+</dd>
+<dt><a id="isExistentDateTime"><span class="pod_lang">isExistentDateTime
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>  $bool = $val-&gt;isExistentDateTime
+  $bool = $val-&gt;isExistentDateTime(format =&gt; 'YMD HMS',date_delim =&gt; '-/',time_delim =&gt; ':')
+  $bool = $val-&gt;isExistentDateTime(date_delim_optional =&gt; '-/',time_delim_optional =&gt; ':')</code></pre>
+
+<p>
+<span class="pod_lang">YYYY-MM-DD HH:MM:SSで設定された日付時刻が実在するものなら1。
+そうでなければundefを返す。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">引数を省略した場合はYYYY-MM-DD HH:MM:SSで設定された日付時刻のみチェックする。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">fomrat
+日付時刻フォーマットを指定する。省略可能。
+省略時は'YYYYMMDD HHMMSS'が指定される。
+'YYYYMMDD HHMMSS'
+'YMD HHMMSS'
+'YYYYMMDD HMS'
+'YMD HMS'
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">date_delim
+日付区切り文字を指定する。区切り文字は複数指定可能。
+省略時は-が指定される。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">time_delim
+時刻区切り文字を指定する。区切り文字は複数指定可能。
+省略時は:が指定される。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">date_delim_optional
+日付区切り文字を指定する。指定した区切り文字と区切り文字なしを対象とする。
+formatは'YYYYMMDD HHMMSS'のみ指定可能。
+date_delimと同時に指定する事は出来ない。
+省略可能。
+
+</span>
+</p>
+
+<p>
+<span class="pod_lang">time_delim_optional
+時刻区切り文字を指定する。指定した区切り文字と区切り文字なしを対象とする。
+formatは'YYYYMMDD HHMMSS'のみ指定可能。
+time_delimと同時に指定する事は出来ない。
+省略可能。
 
 </span>
 </p>
@@ -856,7 +1012,7 @@ Unicode上でのプライベート領域（U+E000～U+F8FF、U+F0000～U+10FFFF�
 <p>
 <span class="pod_lang">日付フォーマット文字列で指定された形式に沿っていれば1。そうでなければundef。
 フォーマット文字列は
-<a href=".././Tripletail/DateTime.html#strFormat">Tripletail::DateTime#strFormat</a>
+<a href="http://search.cpan.org/perldoc/Tripletail::DateTime#strFormat">Tripletail::DateTime#strFormat</a>
 のものと同一である。
 
 </span>
@@ -1433,7 +1589,9 @@ Tripletail::Value - 値の検証や変換
 <li><a href="#isDomainName">isDomainName</a></li>
 <li><a href="#isEmail">isEmail</a></li>
 <li><a href="#isEmpty">isEmpty</a></li>
+<li><a href="#isExistentDateTime">isExistentDateTime</a></li>
 <li><a href="#isExistentDay">isExistentDay</a></li>
+<li><a href="#isExistentTime">isExistentTime</a></li>
 <li><a href="#isGif">isGif</a></li>
 <li><a href="#isHira">isHira</a></li>
 <li><a href="#isHttpUrl">isHttpUrl</a></li>

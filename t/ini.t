@@ -1,59 +1,44 @@
-use Test::More tests =>
-  59
-  +11 # get_reloc.
-;
-use Test::Exception;
+# -*- perl -*-
 use strict;
 use warnings;
-
-BEGIN {
-    open my $fh, '>', "tmp$$.ini";
-    print $fh q{
-[TL]
-trap = none
-Samhain = 1
-Imbolc = 2
-Beltain = 3
-
-[HOST]
-Debughost = 192.168.0.0/24
-Testuser = 192.168.1.1
-
-[TL:special]
-Beltain = 300
-Lugnasa = 400
-
-[TL:special@remote:Testuser@server:Debughost]
-Beltain = 500
-Lugnasa = 600
-
-[RelocTest]
-a=...
-b=.../
-c=....
+use Test::Exception;
+use Test::More tests =>
+  60
+  +13 # get_reloc.
+;
+use t::make_ini {
+    ini => {
+        TL => {
+            trap    => 'none',
+            Samhain => 1,
+            Imbolc  => 2,
+            Beltain => 3,
+        },
+        'TL:special' => {
+            Beltain => 300,
+            Lugnasa => 400,
+        },
+        'TL:special@remote:Testuser@server:Debughost' => {
+            Beltain => 500,
+            Lugnasa => 600,
+        },
+        HOST => {
+            Debughost => '192.168.0.0/24',
+            Testuser  => '192.168.1.1',
+        },
+        RelocTest => {
+            a => '...',
+            b => '.../',
+            c => '....',
+        },
+    },
 };
-    close $fh;
-    eval qq{use Tripletail qw(tmp$$.ini special)};
-	die if $@;
-
-    open $fh, '>', "tmp2$$.ini";
-    print $fh q{
-[TL]
-trapnone
-};
-    close $fh;
-
-}
-
-END {
-    unlink "tmp$$.ini";
-    unlink "tmp2$$.ini";
-}
+use Tripletail $t::make_ini::INI_FILE, 'special';
 
 my $ini;
 ok($ini = $TL->newIni, 'newIni');
 dies_ok {$ini->read("file$$.dummy")} 'read cant open file die';
-ok($ini->read("tmp$$.ini"), 'read');
+ok($ini->read($t::make_ini::INI_FILE), 'read');
 
 dies_ok {$ini->existsGroup} 'existsGroup undef';
 dies_ok {$ini->existsGroup(\123)} 'existsGroup ref';
@@ -77,7 +62,8 @@ dies_ok {$ini->get(\123)} 'get ref';
 dies_ok {$ini->get(TL => \123)} 'get ref';
 is($ini->get(TL => 'trap'), 'none', 'get');
 is($ini->get(TL => 'trap',1), 'none', 'get');
-is($ini->get(TL => 'TRAP'), undef, 'get');
+is($ini->get(TL => 'TRAP' => undef), undef, 'get');
+dies_ok {$ini->get(TL => 'TRAP')} 'get';
 
 
 sub toHash {
@@ -109,11 +95,22 @@ dies_ok {$ini->set(Foo => '  ' => 222)} 'set space';
 dies_ok {$ini->set(Foo => aaa => '  ')} 'set space';
 ok($ini->set(Foo => aaa => 111), 'set');
 dies_ok {$ini->write("/$$/$$/$$/file$$.dummy")} 'write cant open file die';
-ok($ini->write("tmp$$.ini"), 'write');
+ok($ini->write($t::make_ini::INI_FILE), 'write');
 
-is($ini->_filename, "tmp$$.ini" , '_filename');
+is($ini->_filename, $t::make_ini::INI_FILE , '_filename');
 
+do {
+    open my $fh, '>', "tmp2$$.ini";
+    print {$fh} <<'EOF';
+[TL]
+trapnone
+EOF
+    close $fh;
+};
 dies_ok {$ini->read("tmp2$$.ini")} 'read data format error die';
+END {
+    unlink "tmp2$$.ini";
+}
 
 dies_ok {$ini->delete} 'delete undef';
 dies_ok {$ini->delete(\123)} 'delete ref';
@@ -139,13 +136,15 @@ dies_ok {$ini->deleteGroup} 'const object undef';
 {
   my $ini = $TL->INI;
   is($ini->get      (RelocTest => 'a'), '...', 'RelocTest.a is "..."');
-  is($ini->get_reloc(RelocTest => 'a'), '.',   '- relocated');
+  is($ini->get_reloc(RelocTest => 'a'), 't',   '- relocated');
   is($ini->get      (RelocTest => 'b'), '.../', 'RelocTest.b is ".../"');
-  is($ini->get_reloc(RelocTest => 'b'), './', '  - relocated');
+  is($ini->get_reloc(RelocTest => 'b'), 't/', '  - relocated');
   is($ini->get      (RelocTest => 'c'), '....', 'RelocTest.c is "...."');
   is($ini->get_reloc(RelocTest => 'c'), '....', '  - not relocated');
-  is($ini->get      (RelocTest => 'd'), undef, 'RelocTest.c is undef');
-  is($ini->get_reloc(RelocTest => 'd'), undef, '  - not relocated');
+  is($ini->get      (RelocTest => 'd' => undef), undef, 'RelocTest.c is undef');
+  is($ini->get_reloc(RelocTest => 'd' => undef), undef, '  - not relocated');
+  dies_ok {$ini->get      (RelocTest => 'd')} 'RelocTest.c is undef';
+  dies_ok {$ini->get_reloc(RelocTest => 'd')} '  - not relocated';
 
   my $ini2 = $TL->newIni();
   $ini2->set(RelocTest2 => 'a' => '...');
@@ -155,4 +154,3 @@ dies_ok {$ini->deleteGroup} 'const object undef';
   $ini2->{filename} = "../nofile.ini";
   is($ini2->get_reloc(RelocTest2 => 'a'), '..', '  - relocated to updir');
 }
-

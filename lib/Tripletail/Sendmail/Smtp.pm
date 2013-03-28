@@ -6,8 +6,7 @@ use strict;
 use warnings;
 use Tripletail;
 use IO::Socket::INET;
-require Tripletail::Sendmail;
-our @ISA = qw(Tripletail::Sendmail);
+use base 'Tripletail::Sendmail';
 
 1;
 
@@ -16,12 +15,12 @@ sub _new {
 	my $group = shift;
 	my $this = bless {} => $class;
 
-	$this->{group} = $group;
-	$this->{timeout} = $TL->INI->get($group => 'timeout', 300);
-	$this->{host} = $TL->INI->get($group => 'host', 'localhost');
-	$this->{log} = $TL->INI->get($group => 'logging');
-	$this->{sock} = undef;
-	$this->{status} = undef;
+	$this->{group  } = $group;
+	$this->{timeout} = $TL->INI->get($group => timeout => 300        );
+	$this->{host   } = $TL->INI->get($group => host    => 'localhost');
+	$this->{log    } = $TL->INI->get($group => logging => undef      );
+	$this->{sock   } = undef;
+	$this->{status } = undef;
 
 	$this->{timeout_period} = $TL->parsePeriod($this->{timeout});
 

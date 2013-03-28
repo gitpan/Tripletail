@@ -83,7 +83,7 @@ Tripletail::Form - フォーム情報
 
 <pre class="pod_verbatim"><code>  my $form = $TL-&gt;newForm;
   $form-&gt;set(Command =&gt; 'DoDispList');
-  
+
   $TL-&gt;location(
       $form-&gt;toLink('foo.cgi'));
   # Location: http://....../foo.cgi?Command=DoDispList</code></pre>
@@ -346,7 +346,7 @@ $keyが存在しなくてもエラーとはならない。
 <p>
 <span class="pod_lang">アップロードキーが存在すれば1を、そうでなければundefを返す。
 ファイルが実際にアップロードされたかどうかに関わらず, キーの存在だけを
-判断します. 
+判断します.
 
 </span>
 </p>
@@ -582,6 +582,20 @@ toExtLinkメソッドを利用すること。
 </p>
 
 </dd>
+<dt><a id="toHash"><span class="pod_lang">toHash
+
+</span></a></dt>
+<dd>
+<pre class="pod_verbatim"><code>    my $hash = $form-&gt;toHash();
+    # $hash is like {a =&gt; 1, b =&gt; [2, 20]}</code></pre>
+
+<p>
+<span class="pod_lang">フォームデータを HASH ref の形式で返す。
+
+</span>
+</p>
+
+</dd>
 <dt><a id="haveSessionCheck"><span class="pod_lang">haveSessionCheck
 
 </span></a></dt>
@@ -717,6 +731,7 @@ Tripletail::Form - フォーム情報
 <li><a href="#setFragment">setFragment</a></li>
 <li><a href="#setLink">setLink</a></li>
 <li><a href="#toExtLink">toExtLink</a></li>
+<li><a href="#toHash">toHash</a></li>
 <li><a href="#toLink">toLink</a></li>
 </ul>
 </div>

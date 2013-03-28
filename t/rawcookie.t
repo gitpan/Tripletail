@@ -1,16 +1,11 @@
-use Test::More tests => 16;
+# -*- perl -*-
+use Test::More tests => 17;
 use Test::Exception;
 use strict;
 use warnings;
+use Tripletail qw(/dev/null);
 
-BEGIN {
-    eval q{use Tripletail qw(/dev/null)};
-}
-
-END {
-}
-
-$ENV{HTTP_COOKIE} = 'foo=bar; aaa=bbb';
+$ENV{HTTP_COOKIE} = 'foo=bar; aaa="bbb"';
 
 dies_ok { $TL->getRawCookie } 'calling getRawCookie() outside startCgi()';
 
@@ -34,6 +29,7 @@ $TL->startCgi(
         dies_ok {$c->delete} 'delete undef';
         dies_ok {$c->delete(\123)} 'delete ref';
         ok($c->delete('foo'), 'delete');
+        is $c->get('foo'), undef, 'delete then get';
 
         like(($c->_makeSetCookies)[0], qr/^foo=;/, '_makeSetCookies');
 

@@ -5,8 +5,7 @@ package Tripletail::Filter::TEXT;
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::Filter;
-our @ISA = qw(Tripletail::Filter);
+use base 'Tripletail::Filter::Cookie';
 
 # オプション一覧:
 # * charset     => 出力の文字コード。(UTF-8から変換される)
@@ -119,11 +118,11 @@ UTF-8，Shift_JIS，EUC-JP，ISO-2022-JP
 
 =item contenttype
 
-  $TL->setContentFilter('Tripletail::Filter::TEXT', contenttype => 'text/plain; charset=sjis');
+  $TL->setContentFilter('Tripletail::Filter::TEXT', contenttype => 'text/plain; charset=Shift_JIS');
 
 Content-Typeを指定する。省略可能。
 
-デフォルトはtext/plain; charset=（charasetで指定された文字コード）。
+デフォルトはtext/plain; charset=（charsetで指定された文字コード）。
 
 =back
 

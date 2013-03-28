@@ -16,31 +16,13 @@ To install this module, run the following commands:
     make install
 
 
-DEPENDENCIES
-~~~~~~~~~~~~
-requires:
-    Crypt::CBC
-    Crypt::Rijndael
-    Data::Dumper
-    DBI
-    Digest::HMAC_SHA1
-    File::Path
-    IO::Scalar
-    MIME::Tools                    5.411
-    PadWalker                      1.0
-    Test::Exception
-    Test::More
-    Text::CSV_XS
-    Unicode::Japanese
-
-
 SEE ALSO
 ~~~~~~~~
 
 For further information, please refer to http://tripletail.jp/
 
 
-COPYRIGHT AND LICENCE
+COPYRIGHT AND LICENSE
 ~~~~~~~~~~~~~~~~~~~~~
 
 Copyright (C) 2006 YMIRLINK Inc.

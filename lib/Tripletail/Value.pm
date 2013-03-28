@@ -5,6 +5,7 @@ package Tripletail::Value;
 use strict;
 use warnings;
 use Tripletail;
+use Unicode::Japanese ();
 
 #---------------------------------- 正規表現
 
@@ -21,7 +22,7 @@ my $pcmailexp = qr{^
 \z}x;
 my $mobilemailexp = qr{^
 	((?:
-	  (?:$atext(?:$dotString)) # Dot-string
+	  (?:$dotString) # Dot-string
 	 |
 	  (?:"(\\[\x20-\x7f]|[\x21\x23-\x5b\x5d-\x7e])+")   # Quoted-string
 	)) # Local-part
@@ -103,6 +104,26 @@ my @MOBILE_AGENTS = (
     # Softbank端末かつUP.Browserを含むものもあるのでSoftbankの後に判別すること
     [qr/UP\.Browser/i, 'sjis-au'   ],
    );
+
+# 日付時刻
+
+# 区切り文字
+my $DEFAULT_DATE_DELIM = '-';
+my $DEFAULT_TIME_DELIM = ':';
+
+# フォーマット
+my $YYYYMMDD = 'YYYYMMDD';
+my $HHMMSS = 'HHMMSS';
+my $YYYYMMDDHHMMSS = 'YYYYMMDD HHMMSS';
+my $YYYYMMDDHMS = 'YYYYMMDD HMS';
+my $YMDHHMMSS = 'YMD HHMMSS';
+my $YMD = 'YMD';
+my $HMS = 'HMS';
+my $YMDHMS = 'YMD HMS';
+
+my $DEFAULT_DATE_FORMAT = $YYYYMMDD;
+my $DEFAULT_TIME_FORMAT = $HHMMSS;
+my $DEFAULT_DATETIME_FORMAT = $YYYYMMDDHHMMSS;
 
 1;
 
@@ -475,13 +496,109 @@ sub isKata {
 sub isExistentDay {
 	# YYYY-MM-DD この日が存在するなら1
 	my $this = shift;
+	my %option = @_;
+
+	for my $key (keys %option) {
+		if($key !~ /^format|date_delim|date_delim_optional$/) {
+			die __PACKAGE__."#isExistentDay: invalid argument. [$key] (引数名の $key はサポートされていません)\n";
+		}
+	}
+
+	$option{format} = exists $option{format} ? $option{format} : $DEFAULT_DATE_FORMAT;
+	if($option{format} !~ /^$YYYYMMDD|$YMD$/o) {
+		die __PACKAGE__."#isExistentDateTime: invalid argument. [$option{format}] (formatの $option{format} はサポートされていません)\n";
+	}
+
+	if(exists $option{date_delim} && exists $option{date_delim_optional}) {
+		die __PACKAGE__."#isExistentDay: invalid argument. (date_delim/date_delim_optionalを同時に指定する事はできません)\n";
+	}
+
+	if($option{format} ne $YYYYMMDD && exists $option{date_delim_optional}) {
+		die __PACKAGE__."#isExistentDay: invalid argument. [$option{format}] ([YYYYMMDD]以外ではoptionalパラメータを指定できません)\n";
+	}
 
 	if(!defined($this->{value})) {
 		return undef;
 	}
 
-	my @date = $this->_parseDate($this->{value});
-	@date ? $this->_isExistentDay(@date) : undef;
+	my @date = $this->_parseDate(_get_parse_param($this->{value}, \%option));
+	if(!@date || !$this->_isExistentDay(@date)) {
+		return undef;
+	}
+
+	1;
+}
+
+sub isExistentTime {
+	# HH:mm:ss この時間が存在するなら1
+	my $this = shift;
+	my %option = @_;
+
+	for my $key (keys %option) {
+		if($key !~ /^format|time_delim|time_delim_optional$/) {
+			die __PACKAGE__."#isExistentTime: invalid argument. [$key] (引数名の $key はサポートされていません)\n";
+		}
+	}
+
+	$option{format} = exists $option{format} ? $option{format} : $DEFAULT_TIME_FORMAT;
+	if($option{format} !~ /^$HHMMSS|$HMS$/o) {
+		die __PACKAGE__."#isExistentTime: invalid argument. [$option{format}] (formatの $option{format} はサポートされていません)\n";
+	}
+
+	if(exists $option{time_delim} && exists $option{time_delim_optional}) {
+		die __PACKAGE__."#isExistentTime: invalid argument. (time_delim/time_delim_optionalを同時に指定する事はできません)\n";
+	}
+
+	if($option{format} ne $HHMMSS && exists $option{time_delim_optional}) {
+		die __PACKAGE__."#isExistentTime: invalid argument. [$option{format}] ([HHMMSS]以外ではoptionalパラメータを指定できません)\n";
+	}
+
+	if(!defined($this->{value})) {
+		return undef;
+	}
+
+	my @time = $this->_parseTime(_get_parse_param($this->{value}, \%option));
+	if(!@time || !$this->_isExistentTime(@time)) {
+		return undef;
+	}
+
+	1;
+}
+
+sub isExistentDateTime {
+	# YYYY-MM-DD HH:mm:ss この日時が存在するなら1
+	my $this = shift;
+	my %option = @_;
+
+	for my $key (keys %option) {
+		if($key !~ /^format|date_delim|date_delim_optional|time_delim|time_delim_optional$/) {
+			die __PACKAGE__."#isExistentDateTime: invalid argument. [$key] (引数名の $key はサポートされていません)\n";
+		}
+	}
+
+	$option{format} = exists $option{format} ? $option{format} : $DEFAULT_DATETIME_FORMAT;
+	if($option{format} !~ /^$YYYYMMDDHHMMSS|$YYYYMMDDHMS|$YMDHHMMSS|$YMDHMS$/o) {
+		die __PACKAGE__."#isExistentDateTime: invalid argument. [$option{format}] (formatの $option{format} はサポートされていません)\n";
+	}
+	
+	if((exists $option{date_delim} && exists $option{date_delim_optional}) || (exists $option{time_delim} && exists $option{time_delim_optional})) {
+		die __PACKAGE__."#isExistentDateTime: invalid argument. (date_delim/date_delim_optional又はtime_delim/time_delim_optionalを同時に指定する事はできません)\n";
+	}
+
+	if($option{format} ne $YYYYMMDDHHMMSS && (exists $option{date_delim_optional} || exists $option{time_delim_optional})) {
+		die __PACKAGE__."#isExistentDateTime: invalid argument. [$option{format}] ([YYYYMMDD HHMMSS]以外ではoptionalパラメータを指定できません)\n";
+	}
+
+	if(!defined($this->{value})) {
+		return undef;
+	}
+
+	my @datetime = $this->_parseDateTime(_get_parse_param($this->{value}, \%option));
+	if(!@datetime || !$this->_isExistentDateTime(@datetime)) {
+		return undef;
+	}
+
+	1;
 }
 
 sub isGif {
@@ -1355,6 +1472,9 @@ sub _isExistentDay {
 	if($mon < 1 || $mon > 12) {
 		return 0;
 	}
+	if($day < 1) {
+		return 0;
+	}
 
 	my $maxday = do {
 		if($this->_isLeapYear($year) && $mon == 2) {
@@ -1379,15 +1499,157 @@ sub _isExistentTime {
 			$sec >= 0 && $sec <= 59;
 }
 
+sub _isExistentDateTime {
+	my $this = shift;
+	my $year = shift;
+	my $mon = shift;
+	my $day = shift;
+	my $hour = shift;
+	my $min = shift;
+	my $sec = shift;
+	
+	if($this->_isExistentDay($year,$mon,$day) && $this->_isExistentTime($hour,$min,$sec)) {
+		return 1;
+	}
+	
+	return 0;
+}
+
 sub _parseDate {
 	my $this = shift;
 	my $str = shift;
+	my $format = shift || $DEFAULT_DATE_FORMAT;
+	my $option_param = shift;
+	
+	my $date_delim = _get_delim_regexp($option_param->{date}, $DEFAULT_DATE_DELIM);
 
-	if($str =~ m!^(\d{4})-(\d{2})-(\d{2})$!) {
+	my $reg;
+	if($format eq $YYYYMMDD) {
+		$reg = qr{^(\d{4})$date_delim(\d{2})$date_delim(\d{2})$};
+	}
+	elsif($format eq $YMD) {
+		$reg = qr{^(\d{2}|\d{4})$date_delim(\d{1,2})$date_delim(\d{1,2})$};
+	}
+
+	if($str =~ m!^$reg$!) {
 		return ($1, $2, $3);
 	} else {
 		return ();
 	}
+}
+
+sub _parseTime {
+	my $this = shift;
+	my $str = shift;
+	my $format = shift || $DEFAULT_TIME_FORMAT;
+	my $option_param = shift;
+
+	my $time_delim = _get_delim_regexp($option_param->{time}, $DEFAULT_TIME_DELIM);
+
+	my $reg;
+	if($format eq $HHMMSS) {
+		$reg = qr{^(\d{2})$time_delim(\d{2})$time_delim(\d{2})$};
+	}
+	elsif($format eq $HMS) {
+		$reg = qr{^(\d{1,2})$time_delim(\d{1,2})$time_delim(\d{1,2})$};
+	}
+
+	if($str =~ m!^$reg$!) {
+		return ($1, $2, $3);
+	} else {
+		return ();
+	}
+}
+
+sub _parseDateTime {
+	my $this = shift;
+	my $str = shift;
+	my $format = shift || $DEFAULT_DATETIME_FORMAT;
+	my $option_param = shift;
+
+	my $date_delim = _get_delim_regexp($option_param->{date}, $DEFAULT_DATE_DELIM);
+	my $time_delim = _get_delim_regexp($option_param->{time}, $DEFAULT_TIME_DELIM);
+
+	my $reg;
+	if($format eq $YYYYMMDDHHMMSS) {
+		$reg = qr{^(\d{4})$date_delim(\d{2})$date_delim(\d{2}) ?(\d{2})$time_delim(\d{2})$time_delim(\d{2})$};
+	}
+	elsif($format eq $YYYYMMDDHMS) {
+		$reg = qr{^(\d{4})$date_delim(\d{2})$date_delim(\d{2}) ?(\d{1,2})$time_delim(\d{1,2})$time_delim(\d{1,2})$};
+	}
+	elsif($format eq $YMDHHMMSS) {
+		$reg = qr{^(\d{2}|\d{4})$date_delim(\d{1,2})$date_delim(\d{1,2}) ?(\d{2})$time_delim(\d{2})$time_delim(\d{2})$};
+	}
+	elsif($format eq $YMDHMS) {
+		$reg = qr{^(\d{2}|\d{4})$date_delim(\d{1,2})$date_delim(\d{1,2}) ?(\d{1,2})$time_delim(\d{1,2})$time_delim(\d{1,2})$};
+	}
+
+	if($str =~ m!$reg!) {
+		return ($1, $2, $3, $4, $5, $6);
+	} else {
+		return ();
+	}
+}
+
+sub _get_delim_regexp {
+	my $param = shift;
+	my $default = shift;
+	
+	if(defined $param) {
+		my $delim_str = length($param->{delim}) > 0 ? '['.quotemeta($param->{delim}).']' : '';
+		$delim_str = $param->{optional} ? $delim_str.'?' : $delim_str;
+		$delim_str;
+	}
+	else {
+		$default;
+	}
+}
+
+sub _get_parse_param {
+	my $str = shift;
+	my $option = shift;
+
+	my $format = $option->{format};
+
+	my $option_param;
+	if(exists $option->{date_delim}) {
+		$option_param->{date}->{delim} = $option->{date_delim};
+		$option_param->{date}->{optional} = 0;
+	}
+	elsif(exists $option->{date_delim_optional}) {
+		$option_param->{date}->{delim} = $option->{date_delim_optional};
+		$option_param->{date}->{optional} = 1;
+	}
+	else{
+		$option_param->{date}->{delim} = $DEFAULT_DATE_DELIM;
+	}
+
+	if(exists $option->{time_delim}) {
+		$option_param->{time}->{delim} = $option->{time_delim};
+		$option_param->{time}->{optional} = 0;
+	}
+	elsif(exists $option->{time_delim_optional}) {
+		$option_param->{time}->{delim} = $option->{time_delim_optional};
+		$option_param->{time}->{optional} = 1;
+	}
+	else {
+		$option_param->{time}->{delim} = $DEFAULT_TIME_DELIM;
+	}
+
+	# 区切り文字なしの場合は文字長は固定でなければいけない
+	# 想定外の文字長の場合はデフォルトの区切り文字をセットする
+	if(($option_param->{date}->{delim} eq '' || $option_param->{time}->{delim} eq '') && $option->{format} =~ /^$YMDHMS|$YYYYMMDDHMS|$YMDHHMMSS$/o && length($str) != 14) {
+		$option_param->{date}->{delim} = $DEFAULT_DATE_DELIM;
+		$option_param->{time}->{delim} = $DEFAULT_TIME_DELIM;
+	}
+	elsif($option_param->{date}->{delim} eq '' && $option->{format} eq $YMD && length($str) != 8) {
+		$option_param->{date}->{delim} = $DEFAULT_DATE_DELIM;
+	}
+	elsif($option_param->{time}->{delim} eq '' && $option->{format} eq $HMS && length($str) != 6) {
+		$option_param->{time}->{delim} = $DEFAULT_TIME_DELIM;
+	}
+
+	$str, $option->{format}, $option_param;
 }
 
 sub _parse_addr {
@@ -1729,9 +1991,95 @@ C<@spec> に指定できるのは, C<alpha>, C<ALPHA>, C<digit>, C<symbol> の
 =item isExistentDay
 
   $bool = $val->isExistentDay
-
+  $bool = $val->isExistentDay(format => 'YMD',date_delim => '-')
+  $bool = $val->isExistentDay(date_delim_optional => '-')
+  
 YYYY-MM-DDで設定された日付が実在するものなら1。
 そうでなければundefを返す。
+
+引数を省略した場合はYYYY-MM-DDで設定された日付のみチェックする。
+
+fomrat
+日付フォーマットを指定する。省略可能。
+省略時は'YYYYMMDD'が指定される。
+'YYYYMMDD'
+'YMD'
+
+date_delim
+日付区切り文字を指定する。区切り文字は複数指定可能。
+省略時は-が指定される。
+
+date_delim_optional
+日付区切り文字を指定する。指定した区切り文字と区切り文字なしを対象とする。
+formatは'YYYYMMDD'のみ指定可能。
+date_delimと同時に指定する事は出来ない。
+省略可能。
+
+=item isExistentTime
+
+  $bool = $val->isExistentTime
+  $bool = $val->isExistentTime(format => 'HMS',time_delim => ':')
+  $bool = $val->isExistentTime(time_delim_optional => ':')
+  
+HH:MM:SSで設定された時刻が実在するものなら1。
+そうでなければundefを返す。
+
+引数を省略した場合はHH:MM:SSで設定された時刻のみチェックする。
+
+fomrat
+時刻フォーマットを指定する。省略可能。
+省略時は'HHMMSS'が指定される。
+'HHMMSS'
+'HMS'
+
+time_delim
+時刻区切り文字を指定する。区切り文字は複数指定可能。
+省略時は:が指定される。
+
+time_delim_optional
+時刻区切り文字を指定する。指定した区切り文字と区切り文字なしを対象とする。
+formatは'HHMMSS'のみ指定可能。
+time_delimと同時に指定する事は出来ない。
+省略可能。
+
+=item isExistentDateTime
+
+  $bool = $val->isExistentDateTime
+  $bool = $val->isExistentDateTime(format => 'YMD HMS',date_delim => '-/',time_delim => ':')
+  $bool = $val->isExistentDateTime(date_delim_optional => '-/',time_delim_optional => ':')
+  
+YYYY-MM-DD HH:MM:SSで設定された日付時刻が実在するものなら1。
+そうでなければundefを返す。
+
+引数を省略した場合はYYYY-MM-DD HH:MM:SSで設定された日付時刻のみチェックする。
+
+fomrat
+日付時刻フォーマットを指定する。省略可能。
+省略時は'YYYYMMDD HHMMSS'が指定される。
+'YYYYMMDD HHMMSS'
+'YMD HHMMSS'
+'YYYYMMDD HMS'
+'YMD HMS'
+
+date_delim
+日付区切り文字を指定する。区切り文字は複数指定可能。
+省略時は-が指定される。
+
+time_delim
+時刻区切り文字を指定する。区切り文字は複数指定可能。
+省略時は:が指定される。
+
+date_delim_optional
+日付区切り文字を指定する。指定した区切り文字と区切り文字なしを対象とする。
+formatは'YYYYMMDD HHMMSS'のみ指定可能。
+date_delimと同時に指定する事は出来ない。
+省略可能。
+
+time_delim_optional
+時刻区切り文字を指定する。指定した区切り文字と区切り文字なしを対象とする。
+formatは'YYYYMMDD HHMMSS'のみ指定可能。
+time_delimと同時に指定する事は出来ない。
+省略可能。
 
 =item isGif
 

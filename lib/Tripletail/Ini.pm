@@ -4,7 +4,11 @@
 package Tripletail::Ini;
 use strict;
 use warnings;
-use File::Basename ();
+use File::Basename qw(dirname);
+
+# NOTE: Importing Tripletail here leads to a circular dependency so we
+# have to break it by letting Tripletail#newIni to fill this
+# package-global variable $TL.
 our $TL;
 
 1;
@@ -18,7 +22,7 @@ sub _new {
 	$this->{ini} = {};
 	$this->{order} = {};
 
-	if(scalar(@_)) {
+	if (scalar(@_)) {
 		$this->read(@_);
 	}
 
@@ -210,11 +214,9 @@ sub getKeys {
 }
 
 sub get {
-	my $this = shift;
-	my $group = shift;
-	my $key = shift;
-	my $default = shift;
-	my $raw = shift;
+	my $this    = shift;
+	my $group   = shift;
+	my $key     = shift;
 
 	if(!defined($group)) {
 		die __PACKAGE__."#get: arg[1] is not defined. (第1引数が指定されていません)\n";
@@ -227,12 +229,29 @@ sub get {
 		die __PACKAGE__."#get: arg[2] is a reference. [$key] (第2引数がリファレンスです)\n";
 	}
 
-	my @group;
-	if($raw) {
-		push(@group,$group);
-	} else {
-		@group = $this->_getrawgroupname($group);
-	}
+    my $default_ref = do {
+        if (@_) {
+            \(shift);
+        }
+        else {
+            undef;
+        }
+    };
+
+    my @group = do {
+        if (@_) {
+            my $raw = shift;
+            if ($raw) {
+                $group;
+            }
+            else {
+                $this->_getrawgroupname($group);
+            }
+        }
+        else {
+            $this->_getrawgroupname($group);
+        }
+    };
 
 	my $result;
 	foreach my $groupname (@group) {
@@ -242,11 +261,22 @@ sub get {
 		}
 	}
 
-	if(!defined($result)) {
-		$result = $default;
-	}
-
-	$result;
+    if (defined $result) {
+        return $result;
+    }
+    elsif (defined $default_ref) {
+        return $$default_ref;
+    }
+    else {
+        my $undef_if_absent = $TL->INI->get(Ini => treat_absent_values_as_undef => 'false');
+        if ($undef_if_absent eq 'true') {
+            return;
+        }
+        else {
+            die __PACKAGE__."#get: Either group [$group] or key [$key] is absent but no default values are provided (file=".(defined($this->{filename})?$this->{filename}:"-").")".
+              " (グループ [$group] もしくはキー [$key] が存在しない上に、デフォルト値も与えられていませんでした。)";
+        }
+    }
 }
 
 sub get_reloc
@@ -255,7 +285,7 @@ sub get_reloc
   my $value = $this->get(@_);
   if( $value && $this->{filename} )
   {
-    $value =~ s{^\.{3}(?=$|/)}{File::Basename::dirname($this->{filename})}e;
+    $value =~ s{^\.{3}(?=$|/)}{dirname($this->{filename})}e;
   }
   $value;
 }
@@ -453,9 +483,9 @@ Tripletail::Ini - 設定ファイルを読み書きする
 =head1 SYNOPSIS
 
   my $ini = $TL->newIni('foo.ini');
-  
+
   print $ini->get(Group1 => 'Key1');
-  
+
   $ini->set(Group2 => 'Key1' => 'value');
   $ini->write('bar.ini');
 
@@ -559,7 +589,7 @@ $rawに1を指定した場合、特化指定を含んだグループ文字列で
 $rawに1を指定した場合、特化指定を含んだグループ文字列で存在を確認する。
 
 =item C<< getGroups >>
-  
+
   @groups = $ini->getGroups($raw)
 
 グループ一覧を配列で返す。
@@ -577,8 +607,14 @@ $rawに1を指定した場合、特化指定を含んだグループ文字列で
   $val = $ini->get($group => $key, $default, $raw)
 
 指定されたグループ・キーの値を返す。グループorキーがなければ$defaultで指定された値を返す。
-$defaultが指定されなかった場合は、undefを返す。
+$defaultが指定されなかった場合は die で例外を送出する。
 $rawに1を指定した場合、特化指定を含んだグループ文字列で確認し値を返す。
+
+$default は undef であっても構わない。
+
+このメソッドはかつて $default が無く且つ値も存在しなければ undef を返していた。
+その時の動作に基いて書かれた既存のコードとの互換性を得るためのオプションが存在する。
+詳しくは L<"Ini パラメータ"> を参照。
 
 =item C<< get_reloc >>
 
@@ -617,6 +653,31 @@ $rawに1を指定した場合、特化指定を含んだグループ文字列で
 
 指定されたグループを削除する。
 $rawに1を指定した場合、特化指定を含んだグループ文字列で確認し削除する。
+
+=back
+
+
+=head2 Ini パラメータ
+
+Tripletail::Ini クラス自体の動作を設定するためのパラメータ。
+
+C<< use Tripletail qw(foo.ini); >> に与えられたシステム設定用 ini
+ファイルに書かれたものが参照される。
+
+グループ名は "Ini" とする。例:
+
+  [Ini]
+  treat_absent_values_as_undef = true
+
+=over 4
+
+=item C<< treat_absent_values_as_undef >>
+
+  tread_absent_values_as_undef = true
+
+非推奨オプション。true を指定した場合、
+L<< get >> メソッドにデフォルト値が与えられていないのに要求したキーに対する値が存在した場合に
+die することなく undef を返す。
 
 =back
 

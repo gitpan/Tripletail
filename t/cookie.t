@@ -1,19 +1,14 @@
-use Test::More tests => 10;
-use Test::Exception;
+# -*- perl -*-
 use strict;
 use warnings;
+use Test::Exception;
+use Test::More tests => 10;
+use Tripletail qw(/dev/null);
 
-BEGIN {
-    eval q{use Tripletail qw(/dev/null)};
-}
-
-END {
-}
-
-# print $TL->newForm(aaa => 111)->_freeze, "\n";
+# print $TL->newLegacySerializer->serialize({aaa => [111]}), "\n";
 # h616161r79333333313333333133333331
 
-# print $TL->newForm(aaa => 333)->_freeze, "\n";
+# print $TL->newLegacySerializer->serialize({aaa => [333]}), "\n";
 # h616161r79333333333333333333333333
 
 $ENV{HTTP_COOKIE} = 'foo=h616161r79333333313333333133333331';
@@ -22,7 +17,6 @@ dies_ok { $TL->getCookie } 'calling getCookie() outside startCgi()';
 
 $TL->startCgi(
     -main => sub {
-
         my $c;
         ok($c = $TL->getCookie('name'), 'getCookie');
         ok($c = $TL->getCookie, 'getCookie');
@@ -40,7 +34,9 @@ $TL->startCgi(
         $c->set(foo => $form);
 
         my @set = $c->_makeSetCookies;
-        is($set[0], 'foo=h616161r79333333333333333333333333', '_makeSetCookies');
+        is($set[0],
+           'foo=h616161r79333333333333333333333333',
+           '_makeSetCookies');
 
         ok($c = $TL->getCookie, 'getCookie');
     });

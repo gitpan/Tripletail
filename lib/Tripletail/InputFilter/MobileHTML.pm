@@ -2,11 +2,10 @@
 # Tripletail::InputFilter::MobileHTML - 携帯電話向けHTML用CGIクエリ読み取り
 # -----------------------------------------------------------------------------
 package Tripletail::InputFilter::MobileHTML;
+use base 'Tripletail::InputFilter::HTML';
 use strict;
 use warnings;
 use Tripletail;
-require Tripletail::InputFilter::HTML;
-our @ISA = qw(Tripletail::InputFilter::HTML);
 
 1;
 
@@ -53,7 +52,7 @@ sub _getIncode {
 	}
 
 	# 文字コードが指定されていたらそれを使用
-	my $charset = $TL->INI->get('InputFilter' => 'charset');
+	my $charset = $TL->INI->get('InputFilter' => charset => undef);
 
 	if(defined($charset)) {
 		return $charset;

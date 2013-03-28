@@ -1,25 +1,14 @@
-BEGIN {
-    open my $fh, '>', "tmp$$.ini";
-    print $fh q{
-[TL]
-trap = none
-};
-    close $fh;
-    eval q{use Tripletail "tmp$$.ini"};
-}
-
-END {
-    unlink "tmp$$.ini";
-}
-
+# -*- perl -*-
 use strict;
 use warnings;
 use Test::Exception;
 use Test::More tests =>
-  192
+  195
   +15 # isPassword(v0.45).
   +17 # isChar.
+  +44 # isExistentDay,isExistentTime,isExistentDateTime
   ;
+use Tripletail '/dev/null';
 
 #---------------------------------- 一般
 my $v;
@@ -110,10 +99,14 @@ ok(! $v->set('あ_1aA')->isPassword, 'isPassword');
 
 ok($v->set('112-3345')->isZipCode, 'isZipCode');
 ok($v->set('743-48763-3216')->isTelNumber, 'isTelNumber');
-   
-ok($v->set('null@example.org')->isEmail, 'isEmail');
-ok(! $v->set('null.@example.org')->isEmail, 'isEmail');
+
+ok( $v->set('null@example.org' )->isEmail, 'isEmail');
+ok(!$v->set('null.@example.org')->isEmail, 'isEmail');
+ok(!$v->set('.null@example.org')->isEmail, 'isEmail');
+
 ok($v->set('null.@example.org')->isMobileEmail, 'isMobileEmail');
+ok($v->set('.null@example.org')->isMobileEmail, 'isMobileEmail');
+ok($v->set('.....@example.org')->isMobileEmail, 'isMobileEmail');
 
 $v->set(500);
 ok($v->isInteger, 'isInteger');
@@ -135,7 +128,62 @@ ok(! $v->set('アアア1')->isKata, 'isKata');
 ok($v->set('ァーン')->isKata, 'isKata');
 
 ok($v->set('2004-02-29')->isExistentDay, 'isExistentDay');
+#ok($v->set('2004-2-29')->isExistentDay, 'isExistentDay');
+#ok(! $v->set('2004-2-29')->isExistentDay, 'isExistentDay');
 ok(! $v->set('2003-02-29')->isExistentDay, 'isExistentDay');
+
+ok($v->set('00:00:00')->isExistentTime, 'isExistentTime');
+#ok($v->set('0:0:0')->isExistentTime(1), 'isExistentTime');
+#ok(! $v->set('0:0:0')->isExistentTime(0), 'isExistentTime');
+ok(! $v->set('24:00:00')->isExistentTime, 'isExistentTime');
+ok(! $v->set('02:60:00')->isExistentTime, 'isExistentTime');
+ok(! $v->set('02:00:60')->isExistentTime, 'isExistentTime');
+
+# デフォルト
+ok($v->set('2004-02-29 00:00:00')->isExistentDateTime, 'isExistentDateTime');
+ok(! $v->set('2003-02-29 00:00:00')->isExistentDateTime, 'isExistentDateTime');
+ok(! $v->set('2010-06-01 24:00:00')->isExistentDateTime, 'isExistentDateTime');
+ok(! $v->set('2010-6-1 0:00:00')->isExistentDateTime, 'isExistentDateTime');
+
+# オプション
+ok($v->set('2004-02-29 00:00:00')->isExistentDateTime(format => "YYYYMMDD HHMMSS"), 'isExistentDateTime');
+ok($v->set('2004-02-29 00:00:00')->isExistentDateTime(date_delim => '-', time_delim => ':'), 'isExistentDateTime');
+ok($v->set('2004/02/29 00:00:00')->isExistentDateTime(date_delim => '/', time_delim => ':'), 'isExistentDateTime');
+ok($v->set('2004/02/29 00:00:00')->isExistentDateTime(date_delim => '-/', time_delim => '.:'), 'isExistentDateTime');
+ok($v->set('2004 02 29 00 00 00')->isExistentDateTime(date_delim => ' ', time_delim => ' '), 'isExistentDateTime');
+ok($v->set('2004/02/29 00:00:00')->isExistentDateTime(date_delim => '-/ ', time_delim => '.: '), 'isExistentDateTime');
+ok($v->set('2004/02/29 00:00:00')->isExistentDateTime(date_delim => '/'), 'isExistentDateTime');
+ok($v->set('20040229000000')->isExistentDateTime(date_delim => '', time_delim => ''), 'isExistentDateTime');
+ok($v->set('20040229000000')->isExistentDateTime(date_delim_optional => '-/ ', time_delim_optional => '.: '), 'isExistentDateTime');
+ok($v->set('20040229000000')->isExistentDateTime(date_delim_optional => '-/ ', time_delim_optional => '.: '), 'isExistentDateTime');
+
+ok($v->set('2010-06-01 10:00:00')->isExistentDateTime(format => "YMD HMS"), 'isExistentDateTime format');
+ok($v->set('2010-6-1 1:0:0')->isExistentDateTime(format => "YMD HMS"), 'isExistentDateTime format');
+ok($v->set('10-6-1 1:0:0')->isExistentDateTime(format => "YMD HMS"), 'isExistentDateTime format');
+ok(! $v->set('0-6-1 1:0:0')->isExistentDateTime(format => "YMD HMS"), 'isExistentDateTime format');
+ok($v->set('2010-06-01 1:0:0')->isExistentDateTime(format => "YYYYMMDD HMS"), 'isExistentDateTime format');
+ok(! $v->set('2010-6-1 1:0:0')->isExistentDateTime(format => "YYYYMMDD HMS"), 'isExistentDateTime format');
+ok($v->set('2010-6-1 01:00:00')->isExistentDateTime(format => "YMD HHMMSS"), 'isExistentDateTime format');
+ok(! $v->set('2010-6-1 1:0:0')->isExistentDateTime(format => "YMD HHMMSS"), 'isExistentDateTime format');
+ok($v->set('20040229000000')->isExistentDateTime(format => "YMD HMS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+ok(! $v->set('040229000000')->isExistentDateTime(format => "YMD HMS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+ok(! $v->set('0229000000')->isExistentDateTime(format => "YMD HMS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+ok($v->set('20040229000000')->isExistentDateTime(format => "YYYYMMDD HMS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+ok($v->set('20040229000000')->isExistentDateTime(format => "YMD HHMMSS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+ok(! $v->set('20030229000000')->isExistentDateTime(format => "YMD HMS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+ok(! $v->set('20030229000000')->isExistentDateTime(format => "YYYYMMDD HMS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+ok(! $v->set('20030229000000')->isExistentDateTime(format => "YMD HHMMSS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+ok(! $v->set('04229000')->isExistentDateTime(format => "YMD HMS", date_delim => '', time_delim => ''), 'isExistentDateTime format');
+
+ok($v->set('2010-08-12 00:00:00')->isExistentDateTime(time_delim_optional => ':'), 'isExistentDateTime delim_optional');
+ok($v->set('2010-08-12 000000')->isExistentDateTime(time_delim_optional => ':'), 'isExistentDateTime delim_optional');
+ok($v->set('2010-08-12 000000')->isExistentDateTime(time_delim => ''), 'isExistentDateTime delim_optional');
+ok(! $v->set('2010-08-12 00:00:00')->isExistentDateTime(time_delim => ''), 'isExistentDateTime delim_optional');
+ok($v->set('2010-08-31 00:00:00')->isExistentDateTime(date_delim_optional => '-'), 'isExistentDateTime delim_optional');
+ok($v->set('20100831 00:00:00')->isExistentDateTime( date_delim_optional => '-'), 'isExistentDateTime delim_optional');
+ok($v->set('20100831 00:00:00')->isExistentDateTime(date_delim => ''), 'isExistentDateTime delim_optional');
+ok(! $v->set('2010-08-31 00:00:00')->isExistentDateTime(date_delim => ''), 'isExistentDateTime delim_optional');
+ok($v->set('2010-08-31 00:00:00')->isExistentDateTime(date_delim_optional => '-'), 'isExistentDateTime delim_optional');
 
 ok($v->set('GIF89a-----')->isGif, 'isGif');
 ok($v->set("\xFF\xD8-----")->isJpeg, 'isJpeg');

@@ -4,11 +4,11 @@
 package Tripletail::HtmlMail;
 use strict;
 use warnings;
-use LWP 5.00;
 use LWP::UserAgent;
-use URI::URL;
+use MIME::QuotedPrint;
 use Tripletail;
-our $CID_COUNT = 0;
+use Unicode::Japanese ();
+my $CID_COUNT = 0;
 
 1;
 
@@ -462,8 +462,6 @@ sub _encodeMail {
 	my $this = shift;
 	my $data = shift;
 
-	use MIME::QuotedPrint;
-
 	my $encoded;
 
 	foreach my $block (split(/(\0[^\0]+?\0)/, $data)) {
@@ -522,7 +520,7 @@ sub _absLink {
 				if($link =~ m/^[^\#\0]/) {
 					eval {
 						if($link !~ m,((?:https?|ftp)://[\x21-\x7e]+),) {
-							$link = url($link, $base)->abs->as_string;
+							$link = URI->new($link)->abs($base)->as_string;
 						}
 						$link =~ s/\%00/\0/g;
 
@@ -580,7 +578,7 @@ sub _absLinkCss {
 		if(m/^url\(([^\)]+)\)/i) {
 			my $link = $1;
 			eval {
-				$link = url($link, $base)->abs->as_string;
+				$link = URI->new($link)->abs($base)->as_string;
 				$link =~ s/\%00/\0/g;
 			};
 
